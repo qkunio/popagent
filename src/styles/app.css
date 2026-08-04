@@ -2890,9 +2890,10 @@ html[data-theme="dark"] .tk-split .tk-preview { border-left-color: #272E3B; }
   min-width: 0;
   min-height: 42px;
   display: grid;
-  grid-template-columns: 80px auto minmax(0, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  column-gap: 10px;
+  row-gap: 8px;
 }
 .sh-access-label {
   grid-column: 1;
@@ -2904,6 +2905,7 @@ html[data-theme="dark"] .tk-split .tk-preview { border-left-color: #272E3B; }
 }
 .sh-target-chip {
   grid-column: 2;
+  justify-self: end;
   border: 0;
   background: transparent;
   padding: 4px 6px 4px 8px;
@@ -2922,7 +2924,7 @@ html[data-theme="dark"] .tk-split .tk-preview { border-left-color: #272E3B; }
 }
 .sh-target-av {
   flex: 0 0 auto;
-  width: 28px; height: 28px;
+  width: 34px; height: 34px;
   border-radius: 50%;
   color: #FFFFFF;
   font-size: 12px;
@@ -2935,7 +2937,7 @@ html[data-theme="dark"] .tk-split .tk-preview { border-left-color: #272E3B; }
 .sh-target-av + .sh-target-more { margin-left: -6px; }
 .sh-target-more {
   flex: 0 0 auto;
-  width: 28px; height: 28px;
+  width: 34px; height: 34px;
   border-radius: 50%;
   border: 2px solid #FFFFFF;
   background: #F2F3F5;
@@ -3493,7 +3495,8 @@ html[data-theme="dark"] .sh-space-foot-select .sh-select-ic { color: #C9CDD4; }
 }
 .sh-invite-inline::-webkit-scrollbar { display: none; }
 .sh-invite-stack {
-  grid-column: 3;
+  grid-column: 1 / -1;
+  grid-row: 2;
   position: relative;
   min-width: 0;
   width: 100%;

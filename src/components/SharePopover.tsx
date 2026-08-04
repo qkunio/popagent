@@ -487,22 +487,22 @@ export function SharePopover({
               : (
                 <>
                   <Icon name="copy" cls="ic sh-copy-ic" />
-                  <span>复制内网链接</span>
+                  <span>内网链接</span>
                 </>
               )}
           </button>
           <button
             type="button"
             className="sh-internet-btn"
-            aria-label="分享到互联网"
+            aria-label="对外分享"
             onClick={() => {
               setInternetConfirmOpen(true)
               setInternetAcknowledged(false)
               setInternetGenerating(false)
             }}
           >
-            <Icon name="cloud" cls="ic sh-internet-ic" />
-            <span>分享到互联网</span>
+            <Icon name="export" cls="ic sh-internet-ic" />
+            <span>对外分享</span>
           </button>
         </div>
       )}
@@ -510,7 +510,7 @@ export function SharePopover({
       {!webpageOnly && (
         <>
         <div className="sh-access-row">
-        <span className="sh-access-label">可访问用户</span>
+        <span className="sh-access-label">指定可访问的用户</span>
         <button type="button" className="sh-target-chip" onClick={() => setManageOpen(true)} aria-label="管理可访问用户">
           <span className="sh-target-avatars">
             {visibleMembers.slice(0, shownCount).map((m) => (
