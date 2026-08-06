@@ -22,12 +22,17 @@ function previewTitle(p: AppPreview | null | undefined): string {
 }
 
 export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, onClose, onInternetShare }: Props) {
+  type WebApprovalStatus = 'idle' | 'reviewing' | 'approved'
   const [menuOpen, setMenuOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  const [webApprovalOpen, setWebApprovalOpen] = useState(false)
+  const [webApprovalReason, setWebApprovalReason] = useState('')
+  const [webApprovalStatus, setWebApprovalStatus] = useState<WebApprovalStatus>('idle')
   const [webLinkCopied, setWebLinkCopied] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const shareAnchorRef = useRef<HTMLDivElement>(null)
   const copyTimerRef = useRef<number | null>(null)
+  const approvalTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!menuOpen) return
@@ -38,6 +43,21 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     document.addEventListener('mousedown', onClick)
     return () => document.removeEventListener('mousedown', onClick)
   }, [menuOpen])
+
+  useEffect(() => {
+    setWebApprovalOpen(false)
+    setWebApprovalReason('')
+    setWebApprovalStatus('idle')
+    if (approvalTimerRef.current !== null) {
+      window.clearTimeout(approvalTimerRef.current)
+      approvalTimerRef.current = null
+    }
+  }, [data])
+
+  useEffect(() => () => {
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current)
+    if (approvalTimerRef.current !== null) window.clearTimeout(approvalTimerRef.current)
+  }, [])
 
   const currentApp = apps.find(a => a.id === currentAppId) || apps[apps.length - 1] || null
 
@@ -91,6 +111,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   const shareUrl = data && data.type === 'webpage' ? data.footer.share_url : document.location.href
 
   const copyWebpageLink = () => {
+    if (webApprovalStatus !== 'approved') return
     try {
       const el = document.createElement('div')
       el.textContent = shareUrl
@@ -112,6 +133,75 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
       setWebLinkCopied(false)
       copyTimerRef.current = null
     }, 1600)
+  }
+
+  const sendWebApproval = () => {
+    if (webApprovalStatus !== 'idle') return
+    setWebApprovalStatus('reviewing')
+    setWebApprovalOpen(false)
+    approvalTimerRef.current = window.setTimeout(() => {
+      setWebApprovalStatus('approved')
+      approvalTimerRef.current = null
+    }, 5000)
+  }
+
+  const closeWebApproval = () => setWebApprovalOpen(false)
+
+  const renderWebApprovalDialog = () => {
+    if (!webApprovalOpen) return null
+    const reviewing = webApprovalStatus === 'reviewing'
+    const approved = webApprovalStatus === 'approved'
+    return (
+      <div className="web-approval-mask" role="presentation" onMouseDown={(e) => {
+        if (e.target === e.currentTarget) closeWebApproval()
+      }}>
+        <section className="web-approval-dlg" role="dialog" aria-modal="true" aria-labelledby="web-approval-title">
+          <button type="button" className="web-approval-close" onClick={closeWebApproval} aria-label="关闭审批窗口">×</button>
+          <div className={'web-approval-icon' + (approved ? ' approved' : '')} aria-hidden="true">
+            <Icon name={approved ? 'check' : 'lock'} cls="ic" />
+          </div>
+          <h3 id="web-approval-title" className="web-approval-title">
+            {approved ? '审批已通过' : '对外链接需要 +1 审批'}
+          </h3>
+
+          {!approved && (
+            <label className="web-approval-field">
+              <span>汇报理由 <em>选填</em></span>
+              <textarea
+                value={webApprovalReason}
+                onChange={(e) => setWebApprovalReason(e.target.value)}
+                placeholder="例如：用于向外部合作伙伴汇报项目进展"
+                maxLength={200}
+                disabled={reviewing}
+              />
+              <small>{webApprovalReason.length}/200</small>
+            </label>
+          )}
+
+          {reviewing && (
+            <div className="web-approval-progress" role="status" aria-live="polite">
+              <span className="sh-internet-spinner" aria-hidden="true" />
+              <span>预计 5 秒内完成审核</span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            className={'web-approval-action' + (approved ? ' approved' : '')}
+            disabled={reviewing}
+            onClick={approved ? copyWebpageLink : sendWebApproval}
+          >
+            {reviewing ? (
+              <><span className="sh-internet-spinner light" aria-hidden="true" />审核中</>
+            ) : approved ? (
+              <><Icon name={webLinkCopied ? 'check' : 'copy'} cls="ic" />{webLinkCopied ? '已复制' : '复制链接'}</>
+            ) : (
+              '发送审批'
+            )}
+          </button>
+        </section>
+      </div>
+    )
   }
 
   const shareBlock = (
@@ -182,15 +272,27 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
           </div>
         </header>
         <div className="kb-web-share-bar">
-          <span className="kb-web-share-notice">请确认数据安全后再对外分享～</span>
-          <button type="button" className="sh-copy-btn kb-web-copy-btn" onClick={copyWebpageLink}>
-            <Icon name={webLinkCopied ? 'check' : 'copy'} cls="ic sh-copy-ic" />
-            <span>{webLinkCopied ? '已复制' : '我已知晓，复制链接'}</span>
+          <span className="kb-web-share-notice">
+            {webApprovalStatus === 'reviewing' ? '页面通过审核后，可以复制到外部。' : '对外分享需审批，请确认数据安全'}
+          </span>
+          <button
+            type="button"
+            className="sh-copy-btn kb-web-copy-btn"
+            disabled={webApprovalStatus === 'reviewing'}
+            onClick={webApprovalStatus === 'approved' ? copyWebpageLink : () => setWebApprovalOpen(true)}
+          >
+            {webApprovalStatus !== 'reviewing' && (
+              <Icon name={webLinkCopied ? 'check' : 'copy'} cls="ic sh-copy-ic" />
+            )}
+            <span>
+              {webApprovalStatus === 'reviewing' ? '审核中' : webLinkCopied ? '已复制' : '复制链接'}
+            </span>
           </button>
         </div>
         <div className="kb-body kb-body-web">
           <SharePagePreview data={w} />
         </div>
+        {renderWebApprovalDialog()}
       </div>
     )
   }
