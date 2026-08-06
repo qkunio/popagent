@@ -2126,12 +2126,122 @@ html[data-theme="dark"] .kb-close:hover { background: rgba(255,255,255,.06); col
   white-space: nowrap;
 }
 .kb-web-copy-btn { flex: none; }
+.sh-copy-btn.kb-web-copy-btn:disabled,
+.sh-copy-btn.kb-web-copy-btn:disabled:hover {
+  background: #AEB2B8;
+  color: #FFFFFF;
+  cursor: not-allowed;
+}
+/* 可分享网页：复制外链前的 +1 审批 */
+.web-approval-mask {
+  position: fixed; inset: 0; z-index: 260;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  background: rgba(28,31,35,.34);
+  backdrop-filter: blur(2px);
+  animation: dlgfade .14s ease;
+}
+.web-approval-dlg {
+  position: relative;
+  width: 440px; max-width: calc(100vw - 40px);
+  box-sizing: border-box;
+  padding: 26px 28px 24px;
+  border: 1px solid #E5E6EB;
+  border-radius: 16px;
+  background: #FFFFFF;
+  box-shadow: 0 18px 56px rgba(31,35,41,.18), 0 3px 12px rgba(31,35,41,.08);
+  animation: dlgpop .18s cubic-bezier(.22,1,.36,1);
+}
+.web-approval-close {
+  position: absolute; top: 14px; right: 14px;
+  width: 30px; height: 30px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 8px;
+  background: transparent; color: #86909C;
+  font: 24px/1 Arial, sans-serif; cursor: pointer;
+}
+.web-approval-close:hover { background: #F2F3F5; color: #1F2329; }
+.web-approval-icon {
+  width: 46px; height: 46px;
+  display: grid; place-items: center;
+  margin: 2px auto 13px;
+  border-radius: 50%;
+  background: #1F2329; color: #FFFFFF;
+}
+.web-approval-icon.approved { background: #E8F8EE; color: #2E9B5F; }
+.web-approval-icon .ic { width: 23px; height: 23px; }
+.web-approval-title {
+  margin: 0 0 8px;
+  color: #1F2329; text-align: center;
+  font-size: 18px; line-height: 1.4; font-weight: 700;
+}
+.web-approval-desc {
+  max-width: 350px;
+  margin: 0 auto 20px;
+  color: #646A73; text-align: center;
+  font-size: 13px; line-height: 1.65;
+}
+.web-approval-field { display: block; position: relative; margin-bottom: 16px; }
+.web-approval-field > span {
+  display: block; margin-bottom: 7px;
+  color: #1F2329; font-size: 13px; font-weight: 600;
+}
+.web-approval-field > span em {
+  margin-left: 5px; color: #A6A9AD;
+  font-size: 12px; font-weight: 400; font-style: normal;
+}
+.web-approval-field textarea {
+  width: 100%; min-height: 88px;
+  box-sizing: border-box; resize: none;
+  padding: 10px 12px 24px;
+  border: 1px solid #D9DDE5; border-radius: 9px;
+  outline: 0; background: #FFFFFF; color: #1F2329;
+  font: 13px/1.55 inherit;
+  transition: border-color .14s, box-shadow .14s, background .14s;
+}
+.web-approval-field textarea::placeholder { color: #A6A9AD; }
+.web-approval-field textarea:focus { border-color: #3370FF; box-shadow: 0 0 0 3px rgba(51,112,255,.12); }
+.web-approval-field textarea:disabled { background: #F5F6F7; color: #86909C; cursor: not-allowed; }
+.web-approval-field small {
+  position: absolute; right: 10px; bottom: 8px;
+  color: #A6A9AD; font-size: 11px; line-height: 1;
+}
+.web-approval-progress {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: -2px 0 15px;
+  color: #86909C; font-size: 12px;
+}
+.web-approval-action {
+  width: 100%; height: 40px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  border: 0; border-radius: 9px;
+  background: #1F2329; color: #FFFFFF;
+  font: 650 13px/1 inherit; cursor: pointer;
+  transition: background .14s, opacity .14s;
+}
+.web-approval-action:hover:not(:disabled) { background: #000000; }
+.web-approval-action:disabled { background: #AEB2B8; cursor: not-allowed; }
+.web-approval-action.approved { background: #2E9B5F; }
+.web-approval-action.approved:hover { background: #258650; }
+.web-approval-action .ic { width: 15px; height: 15px; }
+.web-approval-action .sh-internet-spinner.light {
+  width: 14px; height: 14px;
+  border-color: rgba(255,255,255,.38); border-top-color: #FFFFFF;
+}
 
 html[data-theme="dark"] .kb-web-share-bar {
   background: #2A2418;
   border-bottom-color: #4A3D22;
 }
 html[data-theme="dark"] .kb-web-share-notice { color: #E2C078; }
+html[data-theme="dark"] .web-approval-dlg { background: #1A1E25; border-color: #3A404B; box-shadow: 0 18px 56px rgba(0,0,0,.5); }
+html[data-theme="dark"] .web-approval-close { color: #8F959E; }
+html[data-theme="dark"] .web-approval-close:hover { background: #252B34; color: #FFFFFF; }
+html[data-theme="dark"] .web-approval-title,
+html[data-theme="dark"] .web-approval-field > span { color: #E5E7EB; }
+html[data-theme="dark"] .web-approval-desc { color: #A9AEB8; }
+html[data-theme="dark"] .web-approval-field textarea { background: #14171C; border-color: #3A404B; color: #E5E7EB; }
+html[data-theme="dark"] .web-approval-field textarea:disabled { background: #252B34; color: #8F959E; }
 
 /* ===== Share Page 可分享网页预览 ===== */
 .sp-wrap {
