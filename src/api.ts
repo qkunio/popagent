@@ -1,4 +1,4 @@
-import type { Skill, Connector, AppItem, Schedule, Folder, SidebarTask, TaskDetail, Message, TraceStep, KanbanPreview, WebpagePreview, AppPreview, KPIData, Insight, WebpageSection } from './types'
+import type { Skill, Connector, AppItem, Schedule, Folder, SidebarTask, TaskDetail, Message, TraceStep, KanbanPreview, WebpagePreview, AppPreview, KPIData, Insight, WebpageSection, GeneratedApp } from './types'
 
 const LS_KEY = 'popagent:data'
 
@@ -16,7 +16,25 @@ interface Store {
 function loadStore(): Store {
   try {
     const raw = localStorage.getItem(LS_KEY)
-    if (raw) return JSON.parse(raw)
+    if (raw) {
+      const store = JSON.parse(raw) as Store
+      // 按内容结构迁移历史数据：看板归为 WebApp；外链网页归为分享页面。
+      store.messages = store.messages.map(message => {
+        const preview = message.app_preview as any
+        if (!preview) return message
+        if (preview.cover && preview.footer && preview.sections) {
+          return { ...message, app_preview: { ...preview, type: 'sharepage' } as AppPreview }
+        }
+        if (preview.kpis && preview.insights && preview.status_tag) {
+          return { ...message, app_preview: { ...preview, type: 'webapp' } as AppPreview }
+        }
+        if (preview.type === 'agent' && preview.name === 'Agent 测试') {
+          return { ...message, app_preview: { ...preview, name: '热点探查Agent' } as AppPreview }
+        }
+        return message
+      })
+      return store
+    }
   } catch {}
   return seedStore()
 }
@@ -76,7 +94,9 @@ function mockAIResponse(message: string, skillId?: string): { content: string; t
       const s = JSON.parse(raw) as Store
       for (const m of s.messages) {
         if (!m?.app_preview) continue
-        if (m.app_preview.type === 'webpage') webpageIdx++
+        const previewType = (m.app_preview as any).type
+        const preview = m.app_preview as any
+        if (previewType === 'webpage' || previewType === 'sharepage' || preview.cover) webpageIdx++
         else appIdx++
       }
     }
@@ -203,8 +223,29 @@ function mockAIResponse(message: string, skillId?: string): { content: string; t
   const sources = ['本地数据']
   let app_preview: AppPreview | undefined | null = null
 
-  const triggersWebpage = message.includes('可分享') || message.includes('分享网页') || message.includes('做一个网页') || /(生成|做).*(分享|外部|网页)/.test(message)
-  if (triggersWebpage) {
+  const triggersAgentApp = /做一个\s*agent\s*app/i.test(message)
+  const triggersSharePage = message.includes('做一个对外链接')
+  const triggersWebApp = /做一个\s*web\s*app/i.test(message)
+  if (triggersAgentApp) {
+    app_preview = {
+      type: 'agent',
+      name: '热点探查Agent',
+      description: '一个可直接对话测试的 Agent 应用',
+      welcome: '发送一条消息开始测试',
+      placeholder: '输入消息',
+    }
+
+    content = `Agent 应用已经创建好了。
+
+我先搭建了一个可直接测试的对话界面，右侧预览区可以立即输入消息体验；顶部的分享、切换预览和关闭等操作也都保留了。
+
+你可以继续告诉我 Agent 的角色、能力或回复风格，我会接着完善。`
+    trace = [
+      { tool: 'define_agent', connector: '应用引擎', label: '应用引擎 · define_agent()', status: 'ok', ms: 120 },
+      { tool: 'build_agent_app', connector: '应用引擎', label: '应用引擎 · build_agent_app(热点探查Agent)', status: 'ok', ms: 240 },
+      { tool: 'open_preview', connector: '应用引擎', label: '应用引擎 · open_preview()', status: 'ok', ms: 60 },
+    ]
+  } else if (triggersSharePage) {
     // ====== 做一个可分享网页 ======
     const today = new Date()
     const todayStr = `${today.getFullYear()}.${String(today.getMonth()+1).padStart(2,'0')}.${String(today.getDate()).padStart(2,'0')}`
@@ -412,7 +453,7 @@ function mockAIResponse(message: string, skillId?: string): { content: string; t
     const share_url = W.footer.url_tpl + '_' + webpageIdx
 
     app_preview = {
-      type: 'webpage',
+      type: 'sharepage',
       theme,
       cover: {
         eyebrow: W.cover.eyebrow,
@@ -441,7 +482,7 @@ ${W.markdownSections.join('\\n\\n')}
 
 ${W.markdownCallout}
 
-网页已生成，右侧可以直接预览并扫码分享，你想继续调整哪一部分？`
+分享页面已生成，右侧可以直接预览并扫码分享，你想继续调整哪一部分？`
 
     trace = [
       { tool: 'structure_page', connector: '分享引擎', label: '分享引擎 · structure_page()', status: 'run', ms: 0 },
@@ -450,7 +491,7 @@ ${W.markdownCallout}
       { tool: 'generate_share_token', connector: '分享引擎', label: '分享引擎 · generate_share_token()', status: 'ok', ms: 180 },
       { tool: 'render_webpage', connector: '分享引擎', label: '分享引擎 · render_webpage(' + W.appName + ')', status: 'ok', ms: 310 },
     ]
-  } else if (message.includes('做应用') || message.includes('做一个应用') || message.includes('看板') || message.includes('应用')) {
+  } else if (triggersWebApp) {
     const today = new Date()
     const y0 = today.getFullYear()
     const m0 = String(today.getMonth() - 0).padStart(2, '0')
@@ -463,7 +504,7 @@ ${W.markdownCallout}
     const meta = T.meta.map(m => ({ ...m, value: m.value === '__RANGE__' ? range : m.value }))
 
     app_preview = {
-      type: 'kanban',
+      type: 'webapp',
       subtitle: T.subtitle,
       title: T.title,
       description: T.description,
@@ -487,7 +528,7 @@ ${T.markdownInsights.join('\n')}
 **改进项：**
 ${T.markdownImprove.join('\n')}
 
-看板已生成，右侧可以直接预览，你想继续改哪个部分？`
+WebApp 已生成，右侧可以直接预览，你想继续改哪个部分？`
     trace = [
       { tool: 'author_profile', connector: '创作者数据', label: '创作者数据 · author_profile()', status: 'run', ms: 0 },
       { tool: 'author_profile', connector: '创作者数据', label: '创作者数据 · author_profile()', status: 'ok', ms: 260 },
@@ -531,6 +572,39 @@ export const api = {
       id: t.id, title: t.title, dot: t.dot, skill_id: t.skill_id,
     }))
     return tasks
+  },
+
+  async generatedApps(): Promise<GeneratedApp[]> {
+    const s = loadStore()
+    const taskById = new Map(s.tasks.map(task => [task.id, task]))
+    return s.messages
+      .filter(message => message.app_preview?.type === 'webapp' || message.app_preview?.type === 'agent')
+      .map(message => {
+        const preview = message.app_preview!
+        const task = taskById.get(message.task_id)
+        if (preview.type === 'agent') {
+          return {
+            id: `${message.task_id}:${message.id}`,
+            taskId: message.task_id,
+            messageId: message.id,
+            type: 'agentapp' as const,
+            title: preview.name || task?.title || 'Agent 应用',
+            description: preview.description || '可直接对话测试的 Agent 应用',
+            createdAt: message.created_at,
+          }
+        }
+        const webapp = preview as KanbanPreview
+        return {
+          id: `${message.task_id}:${message.id}`,
+          taskId: message.task_id,
+          messageId: message.id,
+          type: 'webapp' as const,
+          title: webapp.title || task?.title || 'WebApp',
+          description: webapp.description || webapp.conclusion?.summary || '会话中生成的 WebApp',
+          createdAt: message.created_at,
+        }
+      })
+      .sort((a, b) => b.createdAt - a.createdAt)
   },
 
   async folders(): Promise<Folder[]> {

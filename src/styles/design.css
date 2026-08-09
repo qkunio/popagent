@@ -80,10 +80,16 @@ kbd{font-family:var(--mono);font-size:10.5px;color:var(--muted);background:var(-
 .nav button:hover .ic{color:var(--ink)}
 .nav button.on{background:var(--tray);color:var(--ink);font-weight:600}
 .nav button.on .ic{color:var(--ink)}
+.rail-tabs{display:flex;flex-direction:column;gap:2px;margin-top:14px;padding:0 2px}
+.rail-tabs button{display:flex;align-items:center;gap:10px;width:100%;height:32px;padding:0 8px;border:0;border-radius:7px;background:transparent;color:var(--ink);font-size:13.5px;font-weight:500;text-align:left;transition:background .14s var(--ease),color .14s var(--ease)}
+.rail-tabs button .ic{width:16px;height:16px;color:#25282D;fill:currentColor}
+.rail-tabs button:hover{background:rgba(28,31,35,.055)}
+.rail-tabs button:active{background:rgba(28,31,35,.085)}
+.rail-tabs button.on{background:var(--tray);font-weight:600}
 .railfoot{margin-top:4px;border-top:1px solid var(--line-soft);padding-top:12px;display:flex;align-items:center;gap:10px}
 .nav .l2{margin-left:auto;font-family:var(--mono);font-size:8.5px;color:var(--faint);border:1px solid var(--line);border-radius:5px;padding:1px 4px;letter-spacing:.04em}
 .nav button.on .l2{border-color:rgba(28,31,35,.16);color:var(--muted)}
-.tlp{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:14px}
+.tlp{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:12px}
 .tlp-scroll{flex:1;overflow-y:auto;padding-bottom:10px}
 .fgroup{margin-bottom:12px}
 .fghead{display:flex;align-items:center;gap:3px;padding:5px 6px 5px 10px;cursor:pointer;border-radius:8px;transition:background .14s var(--ease)}

@@ -6,9 +6,11 @@ import { api } from './api'
 import type { SidebarTask, Skill, Connector } from './types'
 import { HomeView } from './views/HomeView'
 import { TaskView } from './views/TaskView'
+import { SkillLibraryView } from './views/SkillLibraryView'
+import { AppsView } from './views/AppsView'
 import type { Prefs } from './api'
 
-export type ViewName = 'home' | 'task'
+export type ViewName = 'home' | 'task' | 'skills' | 'apps'
 
 export interface AppState {
   skills: Skill[]
@@ -97,6 +99,32 @@ function Shell() {
           <button className={'railcta' + (view === 'home' ? ' on' : '')} onClick={() => { setActiveTaskId(null); go('home') }}><Icon name="plus" />新建任务</button>
         </nav>
 
+        <nav className="rail-tabs" aria-label="功能导航">
+          {[
+            { label: '定时任务', icon: 'clock-clockwise', view: null },
+            { label: '技能库', icon: 'folders', view: 'skills' as ViewName },
+            { label: '应用', icon: 'squares-four', view: 'apps' as ViewName },
+            { label: '服务', icon: 'cloud', view: null },
+          ].map(item => (
+            <button
+              type="button"
+              key={item.label}
+              className={item.view === view ? 'on' : ''}
+              onClick={() => {
+                if (item.view) {
+                  setActiveTaskId(null)
+                  go(item.view)
+                } else {
+                  toast(`${item.label}功能即将开放`)
+                }
+              }}
+            >
+              <Icon name={item.icon} cls="ic" />
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+
         <div className="tlp">
           <div className="tlp-scroll">
           <div className="tlp-caption">会话列表</div>
@@ -141,6 +169,8 @@ function Shell() {
       <main className="stage">
         {view === 'home' && <HomeView state={state} />}
         {view === 'task' && <TaskView state={state} taskId={activeTaskId} />}
+        {view === 'skills' && <SkillLibraryView toast={toast} />}
+        {view === 'apps' && <AppsView state={state} />}
       </main>
     </div>
   )

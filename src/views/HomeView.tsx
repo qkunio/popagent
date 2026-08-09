@@ -6,7 +6,7 @@ import { api } from '../api'
 import type { AppState } from '../App'
 
 export function HomeView({ state }: { state: AppState }) {
-  const [draft, setDraft] = useState(state.composerDraft || '做一个应用')
+  const [draft, setDraft] = useState(state.composerDraft || '做一个webapp')
   const [shareOpen, setShareOpen] = useState(false)
   const shareAnchorRef = useRef<HTMLDivElement>(null)
 
@@ -22,7 +22,7 @@ export function HomeView({ state }: { state: AppState }) {
   }
 
   const startInternetShare = () => {
-    const prompt = '生成一个网页'
+    const prompt = '做一个对外链接'
     setShareOpen(false)
     setDraft(prompt)
     window.setTimeout(() => send(prompt), 0)

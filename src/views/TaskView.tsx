@@ -6,11 +6,11 @@ import { KanbanPreview } from '../components/KanbanPreview'
 import { SharePopover } from '../components/SharePopover'
 import { api, streamChat } from '../api'
 import type { AppState } from '../App'
-import type { KanbanPreview as KanbanPreviewData } from '../types'
+import type { AppPreview } from '../types'
 
 export interface AppPreviewItem {
   id: string
-  preview: KanbanPreviewData
+  preview: AppPreview
   messageId: string
   createdAt: number
 }
@@ -54,7 +54,7 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
       if (m?.app_preview) {
         list.push({
           id: 'app_' + m.id + '_' + i,
-          preview: m.app_preview as KanbanPreviewData,
+          preview: m.app_preview as AppPreview,
           messageId: m.id,
           createdAt: m.created_at || Date.now() + i,
         })
@@ -72,7 +72,18 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
     return apps[apps.length - 1]
   }, [apps, currentAppId])
 
-  const currentPreview: KanbanPreviewData | null = currentApp?.preview || null
+  const currentPreview: AppPreview | null = currentApp?.preview || null
+
+  useEffect(() => {
+    if (!taskId || apps.length === 0) return
+    const targetMessageId = sessionStorage.getItem('targetAppMessage:' + taskId)
+    if (!targetMessageId) return
+    const target = apps.find(app => app.messageId === targetMessageId)
+    if (!target) return
+    setCurrentAppId(target.id)
+    setPreviewOpen(true)
+    sessionStorage.removeItem('targetAppMessage:' + taskId)
+  }, [apps, taskId])
 
   useEffect(() => {
     if (!taskId) return
@@ -143,7 +154,7 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
     setTimeout(() => scrollToBottom(false), 10)
 
     let asstMsgTmpId: string | null = null
-    let pendingPreview: KanbanPreviewData | null = null
+    let pendingPreview: AppPreview | null = null
 
     try {
       await streamChat(taskId, text, skillId, {
@@ -230,7 +241,7 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
   }
 
   const startInternetShare = () => {
-    const prompt = '生成一个网页'
+    const prompt = '做一个对外链接'
     setShareOpen(false)
     setDraft(prompt)
     window.setTimeout(() => send(prompt), 0)
@@ -292,10 +303,10 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
                             if (taskId) sessionStorage.removeItem('previewClosed:' + taskId)
                             setPreviewOpen(true)
                           }}
-                          title="点击在右侧打开看板预览"
+                          title="点击在右侧打开应用预览"
                         >
                           <Icon name="squares-four" cls="ic-s ic" />
-                          <span>已生成看板预览 · 点击打开</span>
+                          <span>已生成应用预览 · 点击打开</span>
                           <Icon name="arrow-right" cls="ic-s ic s-app-arrow" />
                         </button>
                       )}

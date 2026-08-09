@@ -401,9 +401,9 @@ export function SharePopover({
 
         {internetGenerating ? (
           <>
-            <h4 className="sh-internet-confirm-title">正在生成可分享网页</h4>
+            <h4 className="sh-internet-confirm-title">正在生成分享页面</h4>
             <p className="sh-internet-confirm-desc">
-              Agent 正在生成可分享网页，请耐心等待 2～3 分钟，期间会占用当前会话。
+              Agent 正在生成分享页面，请耐心等待 2～3 分钟，期间会占用当前会话。
             </p>
             <div className="sh-internet-generating-status">
               <span className="sh-internet-spinner" aria-hidden="true" />
@@ -415,7 +415,7 @@ export function SharePopover({
             <h4 className="sh-internet-confirm-title">确认分享到互联网</h4>
             <div className="sh-internet-notice">
               <p>1. 数据将会发布到公网，请自行把控数据安全。</p>
-              <p>2. 点击确认后，Agent 将自动开始生成可分享网页，请耐心等待 2～3 分钟，期间会占用会话。</p>
+              <p>2. 点击确认后，Agent 将自动开始生成分享页面，请耐心等待 2～3 分钟，期间会占用会话。</p>
             </div>
 
             <label className="sh-internet-ack">

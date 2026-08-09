@@ -44,7 +44,7 @@ export interface TraceStep { tool: string; connector: string; label: string; sta
 export interface KPIData { label: string; value: string; delta?: string; status?: 'good' | 'bad' | 'neutral' }
 export interface Insight { idx: number; title: string; summary: string; bullets: string[] }
 export interface KanbanPreview {
-  type: 'kanban'
+  type: 'webapp'
   subtitle: string
   title: string
   description: string
@@ -66,7 +66,7 @@ export interface WebpageSection {
 }
 
 export interface WebpagePreview {
-  type: 'webpage'
+  type: 'sharepage'
   theme: 'sage' | 'lilac' | 'coral' | 'sky'
   cover: {
     eyebrow: string
@@ -81,7 +81,25 @@ export interface WebpagePreview {
   footer: { note: string; share_url: string; qr_caption: string }
 }
 
-export type AppPreview = KanbanPreview | WebpagePreview
+export interface AgentPreview {
+  type: 'agent'
+  name: string
+  description: string
+  welcome: string
+  placeholder: string
+}
+
+export type AppPreview = KanbanPreview | WebpagePreview | AgentPreview
+
+export interface GeneratedApp {
+  id: string
+  taskId: string
+  messageId: string
+  type: 'webapp' | 'agentapp'
+  title: string
+  description: string
+  createdAt: number
+}
 
 export interface Message {
   id: string; task_id: string; role: 'user' | 'assistant'; content: string
