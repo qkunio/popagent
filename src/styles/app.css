@@ -2445,6 +2445,7 @@ html[data-theme="dark"] .tk-split .tk-preview { background: #14171C; }
 }
 .kb-publish-skill-btn:hover { background: #33353B; }
 .kb-publish-skill-btn .ic { width: 16px; height: 16px; }
+.skillapp-test-body { background: #F5F6F7; }
 
 /* SkillApp：根目录文件树 + Markdown 编辑区 */
 .kb-wrap-skillapp { min-width: 0; }
@@ -2458,6 +2459,9 @@ html[data-theme="dark"] .tk-split .tk-preview { background: #14171C; }
 }
 .skillapp-files { min-width: 0; overflow-y: auto; border-right: 1px solid #E8E9EB; background: #FBFBFC; }
 .skillapp-files > header { height: 46px; padding: 0 11px 0 15px; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #8A9099; font-size: 12px; font-weight: 650; }
+.skillapp-try-button { height: 30px; padding: 0 9px; display: inline-flex; align-items: center; gap: 7px; border: 1px solid #D5D8DD; border-radius: 8px; background: #FFFFFF; color: #30343B; font-size: 12px; font-weight: 650; box-shadow: 0 1px 2px rgba(31,35,41,.04); }
+.skillapp-try-button:hover { border-color: #AEB3BA; background: #F5F6F7; color: #1F2329; }
+.skillapp-try-button .agent-bot-icon { width: 17px; height: 17px; }
 .skillapp-file-actions { display: flex; align-items: center; gap: 2px; }
 .skillapp-file-actions button { width: 28px; height: 28px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: #4E5969; }
 .skillapp-file-actions button:hover { background: #EDEEF0; color: #1F2329; }

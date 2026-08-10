@@ -8,6 +8,7 @@ interface Props {
   folders: string[]
   onFilesChange: (files: SkillAppFile[], folders: string[]) => void
   onDirtyChange?: (dirty: boolean) => void
+  onTry?: () => void
 }
 
 export interface SkillAppPreviewHandle {
@@ -22,7 +23,7 @@ type DraggingItem = { kind: 'file' | 'folder'; path: string } | null
 const baseName = (path: string) => path.split('/').pop() || path
 const parentPath = (path: string) => path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : ''
 
-export const SkillAppPreview = forwardRef<SkillAppPreviewHandle, Props>(function SkillAppPreview({ data, files, folders, onFilesChange, onDirtyChange }, ref) {
+export const SkillAppPreview = forwardRef<SkillAppPreviewHandle, Props>(function SkillAppPreview({ data, files, folders, onFilesChange, onDirtyChange, onTry }, ref) {
   const [selectedPath, setSelectedPath] = useState('SKILL.md')
   const [draftFiles, setDraftFiles] = useState<SkillAppFile[]>(files)
   const [draftFolders, setDraftFolders] = useState<string[]>(folders)
@@ -267,7 +268,13 @@ export const SkillAppPreview = forwardRef<SkillAppPreviewHandle, Props>(function
     <section className="skillapp-preview" aria-label={`${data.name} Skill 文件编辑器`}>
       <aside className="skillapp-files">
         <header>
-          <span>文件</span>
+          <button type="button" className="skillapp-try-button" onClick={onTry}>
+            <svg className="agent-bot-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 7h8a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3v-6a3 3 0 0 1 3-3Z" />
+              <path d="M12 4v3M9 12h.01M15 12h.01M9 16h6M3 12h2M19 12h2" />
+            </svg>
+            <span>试一试</span>
+          </button>
           <div className="skillapp-file-actions">
             <button type="button" title="新建文件" aria-label="新建文件" onClick={() => beginCreate('file')}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.75 3.5h6.5L17.5 7.75v4.5M13 3.75V8h4.25M5.5 3.5h7.75L17.5 7.75V11M11 18h7M14.5 14.5v7M5.5 3.5v17h5" /></svg></button>
             <button type="button" title="新建文件夹" aria-label="新建文件夹" onClick={() => beginCreate('folder')}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l1.75 2H20.5v11h-17zM12 14h5M14.5 11.5v5" /></svg></button>
