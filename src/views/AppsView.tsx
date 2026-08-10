@@ -4,7 +4,13 @@ import { Icon } from '../components/Icon'
 import type { AppState } from '../App'
 import type { GeneratedApp } from '../types'
 
-type AppFilter = 'all' | 'webapp' | 'agentapp'
+type AppFilter = 'all' | 'webapp' | 'agentapp' | 'skillapp'
+
+const appMeta = (type: GeneratedApp['type']) => type === 'agentapp'
+  ? { label: 'AgentApp', icon: 'chat-circle-text' }
+  : type === 'skillapp'
+    ? { label: 'SkillApp', icon: 'lightning' }
+    : { label: 'WebApp', icon: 'columns' }
 
 function relativeTime(timestamp: number) {
   const diff = Math.max(0, Date.now() - timestamp)
@@ -59,6 +65,7 @@ export function AppsView({ state }: { state: AppState }) {
                 ['all', '全部'],
                 ['webapp', 'WebApp'],
                 ['agentapp', 'AgentApp'],
+                ['skillapp', 'SkillApp'],
               ] as const).map(([value, label]) => (
                 <button key={value} type="button" className={filter === value ? 'on' : ''} onClick={() => setFilter(value)}>{label}</button>
               ))}
@@ -77,7 +84,7 @@ export function AppsView({ state }: { state: AppState }) {
                 <button className="app-gallery-card" type="button" key={app.id} onClick={() => openApp(app)}>
                   <div className={'app-card-visual ' + app.type}>
                     <div className="app-visual-icon">
-                      <Icon name={app.type === 'agentapp' ? 'chat-circle-text' : 'columns'} cls="ic" />
+                      <Icon name={appMeta(app.type).icon} cls="ic" />
                     </div>
                     <div className="app-visual-lines" aria-hidden="true"><span /><span /><span /></div>
                   </div>
@@ -86,8 +93,8 @@ export function AppsView({ state }: { state: AppState }) {
                     <p>{app.description}</p>
                     <div className="app-card-meta">
                       <span className={'app-type-chip ' + app.type}>
-                        <Icon name={app.type === 'agentapp' ? 'chat-circle-text' : 'columns'} cls="ic" />
-                        {app.type === 'agentapp' ? 'AgentApp' : 'WebApp'}
+                        <Icon name={appMeta(app.type).icon} cls="ic" />
+                        {appMeta(app.type).label}
                       </span>
                       <span>{relativeTime(app.createdAt)}</span>
                     </div>
@@ -99,7 +106,7 @@ export function AppsView({ state }: { state: AppState }) {
             <div className="apps-empty">
               <Icon name="squares-four" cls="ic" />
               <strong>{apps.length ? '没有匹配的应用' : '暂无应用'}</strong>
-              <span>{apps.length ? '换个关键词或类型试试' : '在会话中创建 WebApp 或 AgentApp 后会显示在这里'}</span>
+              <span>{apps.length ? '换个关键词或类型试试' : '在会话中创建 WebApp、AgentApp 或 SkillApp 后会显示在这里'}</span>
             </div>
           )}
         </div>

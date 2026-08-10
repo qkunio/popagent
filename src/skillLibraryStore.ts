@@ -6,6 +6,9 @@ export interface LibrarySkill {
   description: string
   owner: 'official' | 'mine'
   installed?: boolean
+  detail?: string
+  files?: Array<{ path: string; content: string }>
+  folders?: string[]
 }
 
 const STORAGE_KEY = 'popagent:skill-library'
@@ -63,6 +66,23 @@ export function addSkillToLibrary(): LibrarySkill {
     installed: true,
   }
   writeSkillLibrary([skill, ...skills])
+  return skill
+}
+
+export function publishSkillToLibrary(input: { name: string; description: string; files: Array<{ path: string; content: string }>; folders?: string[]; official?: boolean }): LibrarySkill {
+  const skills = readSkillLibrary()
+  const existing = skills.find(skill => skill.owner === 'mine' && skill.name === input.name)
+  const skill: LibrarySkill = {
+    id: existing?.id || `published-skill-${Date.now()}`,
+    name: input.name,
+    description: input.description,
+    detail: input.files.find(file => file.path === 'SKILL.md')?.content || input.description,
+    files: input.files.map(file => ({ ...file })),
+    folders: [...(input.folders || [])],
+    owner: input.official ? 'official' : 'mine',
+    installed: true,
+  }
+  writeSkillLibrary([skill, ...skills.filter(item => item.id !== skill.id)])
   return skill
 }
 

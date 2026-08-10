@@ -89,13 +89,26 @@ export interface AgentPreview {
   placeholder: string
 }
 
-export type AppPreview = KanbanPreview | WebpagePreview | AgentPreview
+export interface SkillAppFile {
+  path: string
+  content: string
+}
+
+export interface SkillAppPreview {
+  type: 'skill'
+  name: string
+  description: string
+  folders: string[]
+  files: SkillAppFile[]
+}
+
+export type AppPreview = KanbanPreview | WebpagePreview | AgentPreview | SkillAppPreview
 
 export interface GeneratedApp {
   id: string
   taskId: string
   messageId: string
-  type: 'webapp' | 'agentapp'
+  type: 'webapp' | 'agentapp' | 'skillapp'
   title: string
   description: string
   createdAt: number

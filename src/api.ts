@@ -224,9 +224,39 @@ function mockAIResponse(message: string, skillId?: string): { content: string; t
   let app_preview: AppPreview | undefined | null = null
 
   const triggersAgentApp = /做一个\s*agent\s*app/i.test(message)
+  const triggersSkillApp = /做一个\s*skill(?:\s*app)?/i.test(message)
   const triggersSharePage = message.includes('做一个对外链接')
   const triggersWebApp = /做一个\s*web\s*app/i.test(message)
-  if (triggersAgentApp) {
+  if (triggersSkillApp) {
+    const skillName = '热点内容探查'
+    const skillDescription = '发现并整理近期热点，输出可验证的选题方向与执行步骤。'
+    app_preview = {
+      type: 'skill',
+      name: skillName,
+      description: skillDescription,
+      folders: ['sop', 'references'],
+      files: [
+        {
+          path: 'SKILL.md',
+          content: `---\nname: ${skillName}\ndescription: ${skillDescription}\n---\n\n# ${skillName}\n\n## 作用\n\n这个 Skill 用于发现近期热点，并把零散信息整理成清晰、可执行的选题建议。\n\n## 工作流程\n\n1. 按照 [热点发现步骤](sop/step1.md) 收集候选热点。\n2. 使用 [选题检查清单](references/checklist.md) 进行筛选。\n3. 输出热点结论、证据和下一步行动。\n\n## 输出要求\n\n- 先给结论，再提供依据\n- 标明信息时间范围\n- 不确定的信息需要明确说明`,
+        },
+        {
+          path: 'sop/step1.md',
+          content: `# 热点发现步骤\n\n1. 明确用户关注的赛道与时间范围。\n2. 收集多个来源的候选话题。\n3. 对比热度、增长速度与内容供给缺口。\n4. 保留至少一条可核验依据。`,
+        },
+        {
+          path: 'references/checklist.md',
+          content: `# 选题检查清单\n\n- 是否与目标用户相关\n- 是否具备明确的新鲜度\n- 是否有可靠依据\n- 是否能转化为可执行内容\n- 是否存在合规风险`,
+        },
+      ],
+    }
+    content = `SkillApp 已经创建好了。\n\n右侧可以直接查看和编辑 \`SKILL.md\`，并通过文件树打开它引用的 SOP 与参考文件。完成后可点击右上角“发布 Skill”，保存到技能库。`
+    trace = [
+      { tool: 'define_skill', connector: '应用引擎', label: '应用引擎 · define_skill()', status: 'ok', ms: 120 },
+      { tool: 'build_skill_app', connector: '应用引擎', label: `应用引擎 · build_skill_app(${skillName})`, status: 'ok', ms: 220 },
+      { tool: 'open_preview', connector: '应用引擎', label: '应用引擎 · open_preview()', status: 'ok', ms: 60 },
+    ]
+  } else if (triggersAgentApp) {
     app_preview = {
       type: 'agent',
       name: '热点探查Agent',
@@ -578,10 +608,21 @@ export const api = {
     const s = loadStore()
     const taskById = new Map(s.tasks.map(task => [task.id, task]))
     return s.messages
-      .filter(message => message.app_preview?.type === 'webapp' || message.app_preview?.type === 'agent')
+      .filter(message => message.app_preview?.type === 'webapp' || message.app_preview?.type === 'agent' || message.app_preview?.type === 'skill')
       .map(message => {
         const preview = message.app_preview!
         const task = taskById.get(message.task_id)
+        if (preview.type === 'skill') {
+          return {
+            id: `${message.task_id}:${message.id}`,
+            taskId: message.task_id,
+            messageId: message.id,
+            type: 'skillapp' as const,
+            title: preview.name || task?.title || 'SkillApp',
+            description: preview.description || '可编辑并发布到技能库的 SkillApp',
+            createdAt: message.created_at,
+          }
+        }
         if (preview.type === 'agent') {
           return {
             id: `${message.task_id}:${message.id}`,
