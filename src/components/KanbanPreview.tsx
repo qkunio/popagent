@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { Icon } from './Icon'
+import { Icon, useToast } from './Icon'
 import { SharePagePreview } from './SharePagePreview'
 import { SharePopover } from './SharePopover'
 import { SkillDetailDialog } from './SkillDetailDialog'
-import type { AgentPreview, AppPreview, KanbanPreview as KanbanPreviewData, WebpagePreview } from '../types'
+import { SkillAppPreview, type SkillAppPreviewHandle } from './SkillAppPreview'
+import type { AgentPreview, AppPreview, KanbanPreview as KanbanPreviewData, SkillAppFile, SkillAppPreview as SkillAppPreviewData, WebpagePreview } from '../types'
 import type { AppPreviewItem } from '../views/TaskView'
-import { ensureAgentDefaultSkills, readSkillLibrary, toggleLibrarySkillInstalled, useSkillLibrary } from '../skillLibraryStore'
+import { ensureAgentDefaultSkills, publishSkillToLibrary, readSkillLibrary, toggleLibrarySkillInstalled, useSkillLibrary } from '../skillLibraryStore'
+import { downloadSkillZip } from '../skillZip'
 
 interface Props {
   data: AppPreview | null
@@ -32,6 +34,7 @@ function previewTitle(p: AppPreview | null | undefined): string {
   if (!p) return '未命名应用'
   if (p.type === 'sharepage') return p.cover.title || '分享页面'
   if (p.type === 'agent') return p.name || 'Agent 应用'
+  if (p.type === 'skill') return p.name || 'SkillApp'
   return p.title || '未命名 WebApp'
 }
 
@@ -403,6 +406,7 @@ function AgentTestPreview({ data, agentKey }: { data: AgentPreview; agentKey: st
 }
 
 export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, onClose, onInternetShare }: Props) {
+  const toast = useToast()
   type WebApprovalStatus = 'idle' | 'reviewing' | 'approved'
   const [menuOpen, setMenuOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
@@ -413,11 +417,21 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [tabsByApp, setTabsByApp] = useState<Record<string, WorkspaceTabId[]>>({})
   const [activeTabByApp, setActiveTabByApp] = useState<Record<string, WorkspaceTabId | null>>({})
+  const [skillFilesByApp, setSkillFilesByApp] = useState<Record<string, SkillAppFile[]>>({})
+  const [skillFoldersByApp, setSkillFoldersByApp] = useState<Record<string, string[]>>({})
+  const [skillPublishOpen, setSkillPublishOpen] = useState(false)
+  const [skillPublishName, setSkillPublishName] = useState('')
+  const [skillPublishDescription, setSkillPublishDescription] = useState('')
+  const [skillPublishOfficial, setSkillPublishOfficial] = useState(false)
+  const [skillPublishSuccess, setSkillPublishSuccess] = useState(false)
+  const [skillAppDirty, setSkillAppDirty] = useState(false)
+  const [pendingWorkspaceTab, setPendingWorkspaceTab] = useState<WorkspaceTabId | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
   const shareAnchorRef = useRef<HTMLDivElement>(null)
   const copyTimerRef = useRef<number | null>(null)
   const approvalTimerRef = useRef<number | null>(null)
+  const skillPreviewRef = useRef<SkillAppPreviewHandle>(null)
 
   useEffect(() => {
     if (!menuOpen && !addMenuOpen) return
@@ -447,18 +461,65 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
 
   const currentApp = apps.find(a => a.id === currentAppId) || apps[apps.length - 1] || null
   const appKey = currentApp?.id || '__empty__'
+  const skillFiles = data?.type === 'skill' ? (skillFilesByApp[appKey] || data.files) : []
+  const skillFolders = data?.type === 'skill' ? (skillFoldersByApp[appKey] || data.folders || []) : []
   const workspaceTabs = tabsByApp[appKey] || ['preview']
   const requestedActiveTab = activeTabByApp[appKey]
   const activeWorkspaceTab = requestedActiveTab !== undefined && requestedActiveTab !== null && workspaceTabs.includes(requestedActiveTab)
     ? requestedActiveTab
     : workspaceTabs[0] || null
 
+  useEffect(() => {
+    setSkillPublishOpen(false)
+    setSkillAppDirty(false)
+    setPendingWorkspaceTab(null)
+  }, [appKey])
+
+  const activateWorkspaceTab = (tabId: WorkspaceTabId) => {
+    if (data?.type === 'skill' && skillAppDirty && activeWorkspaceTab === 'preview' && tabId !== 'preview') {
+      setPendingWorkspaceTab(tabId)
+      setAddMenuOpen(false)
+      return
+    }
+    setActiveTabByApp(previous => ({ ...previous, [appKey]: tabId }))
+  }
+
+  const saveAndSwitchWorkspaceTab = () => {
+    if (!pendingWorkspaceTab) return
+    skillPreviewRef.current?.save()
+    setSkillAppDirty(false)
+    setActiveTabByApp(previous => ({ ...previous, [appKey]: pendingWorkspaceTab }))
+    setPendingWorkspaceTab(null)
+  }
+
+  const openSkillPublish = () => {
+    if (!data || data.type !== 'skill') return
+    setSkillPublishName(data.name)
+    setSkillPublishDescription(data.description)
+    setSkillPublishOfficial(false)
+    setSkillPublishSuccess(false)
+    setSkillPublishOpen(true)
+  }
+
+  const savePublishedSkill = () => {
+    if (!data || data.type !== 'skill' || !skillPublishName.trim() || !skillPublishDescription.trim()) return
+    const saved = publishSkillToLibrary({
+      name: skillPublishName.trim(),
+      description: skillPublishDescription.trim(),
+      files: skillFiles,
+      folders: skillFolders,
+      official: skillPublishOfficial,
+    })
+    setSkillPublishName(saved.name)
+    setSkillPublishSuccess(true)
+  }
+
   const openWorkspaceTab = (tabId: WorkspaceTabId) => {
     setTabsByApp(previous => {
       const current = previous[appKey] || ['preview']
       return current.includes(tabId) ? previous : { ...previous, [appKey]: [...current, tabId] }
     })
-    setActiveTabByApp(previous => ({ ...previous, [appKey]: tabId }))
+    activateWorkspaceTab(tabId)
     setAddMenuOpen(false)
   }
 
@@ -646,7 +707,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
               type="button"
               key={tabId}
               className={'kb-workspace-tab' + (active ? ' on' : '')}
-              onClick={() => setActiveTabByApp(previous => ({ ...previous, [appKey]: tabId }))}
+              onClick={() => activateWorkspaceTab(tabId)}
             >
               <span className="kb-workspace-tab-leading">
                 <span className="kb-workspace-tab-icon" aria-hidden="true">
@@ -691,7 +752,20 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
         )}
       </div>
       <div className="kb-workspace-spacer" />
-      <div className="kb-top-right">{shareBlock}</div>
+      {pendingWorkspaceTab && (
+        <div className="kb-tab-unsaved-popover" role="dialog" aria-label="未保存改动">
+          <span>改动未保存，是否保存</span>
+          <div><button type="button" className="save" onClick={saveAndSwitchWorkspaceTab}>保存</button><button type="button" onClick={() => setPendingWorkspaceTab(null)}>取消</button></div>
+        </div>
+      )}
+      <div className="kb-top-right">
+        {shareBlock}
+        {data?.type === 'skill' && (
+          <button type="button" className="kb-publish-skill-btn" onClick={openSkillPublish}>
+            <Icon name="paper-plane-tilt" cls="ic" /><span>发布 Skill</span>
+          </button>
+        )}
+      </div>
     </header>
   )
 
@@ -743,7 +817,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
           <div className="kb-empty-ic">📊</div>
           <div className="kb-empty-title">预览面板</div>
           <div className="kb-empty-sub">
-            {empty || '输入「做一个webapp」「做一个agentapp」或「做一个对外链接」，完成后会在这里展示预览。'}
+            {empty || '输入「做一个webapp」「做一个agentapp」「做一个skillapp」或「做一个对外链接」，完成后会在这里展示预览。'}
           </div>
         </div>
       </div>
@@ -809,6 +883,67 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
         <div className="kb-agent-body">
           <AgentTestPreview key={data.name} data={data} agentKey={currentApp?.id || data.name} />
         </div>
+      </div>
+    )
+  }
+
+  if (data.type === 'skill') {
+    const skillData: SkillAppPreviewData = data
+    return (
+      <div className="kb-wrap kb-wrap-skillapp">
+        {workspaceHeader}
+        <SkillAppPreview
+          ref={skillPreviewRef}
+          data={skillData}
+          files={skillFiles}
+          folders={skillFolders}
+          onFilesChange={(files, folders) => {
+            setSkillFilesByApp(current => ({ ...current, [appKey]: files }))
+            setSkillFoldersByApp(current => ({ ...current, [appKey]: folders }))
+            toast('Skill 文件已保存')
+          }}
+          onDirtyChange={setSkillAppDirty}
+        />
+        {skillPublishOpen && (
+          <div className="skill-publish-mask" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setSkillPublishOpen(false) }}>
+            <section className="skill-publish-dialog" role="dialog" aria-modal="true" aria-labelledby="skill-publish-title">
+              {skillPublishSuccess ? (
+                <div className="skill-publish-success">
+                  <span className="skill-publish-success-icon"><Icon name="check" cls="ic" /></span>
+                  <h2 id="skill-publish-title">保存成功</h2>
+                  <p>Skill 已保存到技能库，默认仅你可见</p>
+                  <div className="skill-publish-success-actions">
+                    <button type="button" className="cancel" onClick={() => setSkillPublishOpen(false)}>关闭</button>
+                    <button type="button" className="save" onClick={() => downloadSkillZip(skillPublishName, skillFiles, skillFolders)}><Icon name="export" cls="ic" />下载 ZIP 文件</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <header>
+                    <div>
+                      <span className="skill-publish-icon"><Icon name="lightning" cls="ic" /></span>
+                      <div><h2 id="skill-publish-title">发布 Skill</h2><p>发布后会保存到技能库，默认仅你可见</p></div>
+                    </div>
+                    <button type="button" className="skill-publish-close" onClick={() => setSkillPublishOpen(false)} aria-label="关闭"><Icon name="x" cls="ic" /></button>
+                  </header>
+                  <div className="skill-publish-form">
+                    <label><span>Skill 名称</span><input value={skillPublishName} onChange={event => setSkillPublishName(event.target.value)} /></label>
+                    <label><span>描述</span><textarea value={skillPublishDescription} onChange={event => setSkillPublishDescription(event.target.value)} rows={3} /></label>
+                    <label className="skill-publish-option">
+                      <input type="checkbox" checked={skillPublishOfficial} onChange={event => setSkillPublishOfficial(event.target.checked)} />
+                      <span className="skill-publish-checkbox"><Icon name="check" cls="ic" /></span>
+                      <strong>注册为官方技能</strong><em>仅 admin 可见</em>
+                    </label>
+                  </div>
+                  <footer>
+                    <button type="button" className="cancel" onClick={() => setSkillPublishOpen(false)}>取消</button>
+                    <button type="button" className="save" disabled={!skillPublishName.trim() || !skillPublishDescription.trim()} onClick={savePublishedSkill}>保存</button>
+                  </footer>
+                </>
+              )}
+            </section>
+          </div>
+        )}
       </div>
     )
   }
