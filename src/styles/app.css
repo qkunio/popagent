@@ -2969,6 +2969,14 @@ html[data-theme="dark"] .kb-tool-cards > div { background: #222731; border-color
 .agent-back-card { width: 28px; height: 28px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 7px; background: transparent; color: #737982; }
 .agent-back-card:hover { background: #F2F3F5; color: #1F2329; }
 .agent-back-card .ic { width: 15px; height: 15px; transform: rotate(180deg); }
+.agent-back-anchor { position: relative; flex: none; }
+.agent-back-confirm { width: 270px; padding: 13px; position: absolute; top: calc(100% + 8px); left: 0; z-index: 80; border: 1px solid #E1E3E6; border-radius: 10px; background: #FFFFFF; box-shadow: 0 10px 28px rgba(15,23,42,.16); }
+.agent-back-confirm p { margin: 0 0 12px; color: #30343B; font-size: 12px; line-height: 1.55; font-weight: 500; white-space: nowrap; }
+.agent-back-confirm > div { display: flex; justify-content: flex-end; gap: 7px; }
+.agent-back-confirm button { height: 28px; padding: 0 11px; border: 1px solid #DDE0E4; border-radius: 7px; background: #FFFFFF; color: #4E5969; font-size: 11px; font-weight: 600; }
+.agent-back-confirm button:hover { border-color: #C9CDD4; background: #F5F6F7; color: #1F2329; }
+.agent-back-confirm button.confirm { border-color: #25272C; background: #25272C; color: #FFFFFF; }
+.agent-back-confirm button.confirm:hover { background: #33353B; color: #FFFFFF; }
 @media (max-width: 760px) {
   .agent-profile-scroll { padding: 14px; }
   .agent-identity-card { padding: 22px 18px; align-items: flex-start; gap: 15px; }
@@ -3113,6 +3121,8 @@ html[data-theme="dark"] .kb-tool-cards > div { background: #222731; border-color
   justify-content: space-between;
   border-bottom: 1px solid #E8E9EB;
   color: #1F2329;
+  position: relative;
+  z-index: 3;
 }
 .agent-test-title {
   display: inline-flex;

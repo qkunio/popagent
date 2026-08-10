@@ -77,10 +77,12 @@ function AgentTestPreview({
   const [messages, setMessages] = useState<AgentTestMessage[]>(() => initialAgentMessage ? [{ id: 1, role: 'agent', text: initialAgentMessage }] : [])
   const [streaming, setStreaming] = useState(false)
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
+  const [backConfirmOpen, setBackConfirmOpen] = useState(false)
   const nextId = useRef(initialAgentMessage ? 1 : 0)
   const streamTimerRef = useRef<number | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const clearAnchorRef = useRef<HTMLDivElement>(null)
+  const backAnchorRef = useRef<HTMLDivElement>(null)
   const skillScrollRef = useRef<HTMLDivElement>(null)
   const skillScrollTimerRef = useRef<number | null>(null)
   const skillFilterRef = useRef<HTMLDivElement>(null)
@@ -112,6 +114,15 @@ function AgentTestPreview({
     document.addEventListener('mousedown', closeOnOutsideClick)
     return () => document.removeEventListener('mousedown', closeOnOutsideClick)
   }, [clearConfirmOpen])
+
+  useEffect(() => {
+    if (!backConfirmOpen) return
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!backAnchorRef.current?.contains(event.target as Node)) setBackConfirmOpen(false)
+    }
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    return () => document.removeEventListener('mousedown', closeOnOutsideClick)
+  }, [backConfirmOpen])
 
   useEffect(() => {
     if (!skillFilterOpen) return
@@ -198,6 +209,13 @@ function AgentTestPreview({
   const confirmClearMessages = () => {
     setClearConfirmOpen(false)
     clearMessages()
+  }
+
+  const confirmBack = () => {
+    setBackConfirmOpen(false)
+    clearMessages()
+    if (onBack) onBack()
+    else setView('profile')
   }
 
   const saveSystemPrompt = () => {
@@ -342,7 +360,18 @@ function AgentTestPreview({
     <section className="agent-test" aria-label={data.name}>
       <header className="agent-test-head">
         <div className="agent-test-title">
-          <button type="button" className="agent-back-card" aria-label={onBack ? '返回 Skill 编辑器' : '返回 Agent 卡片'} onClick={() => onBack ? onBack() : setView('profile')}><Icon name="arrow-right" cls="ic" /></button>
+          <div className="agent-back-anchor" ref={backAnchorRef}>
+            <button type="button" className="agent-back-card" aria-label={onBack ? '返回 Skill 编辑器' : '返回 Agent 卡片'} aria-expanded={backConfirmOpen} onClick={() => setBackConfirmOpen(true)}><Icon name="arrow-right" cls="ic" /></button>
+            {backConfirmOpen && (
+              <section className="agent-back-confirm" role="dialog" aria-label="确认返回">
+                <p>返回后将清空所有测试消息，是否继续</p>
+                <div>
+                  <button type="button" className="confirm" onClick={confirmBack}>确定</button>
+                  <button type="button" onClick={() => setBackConfirmOpen(false)}>取消</button>
+                </div>
+              </section>
+            )}
+          </div>
           <svg className="agent-bot-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M8 7h8a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3v-6a3 3 0 0 1 3-3Z" />
             <path d="M12 4v3M9 12h.01M15 12h.01M9 16h6M3 12h2M19 12h2" />
