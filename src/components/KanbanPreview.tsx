@@ -38,10 +38,28 @@ function previewTitle(p: AppPreview | null | undefined): string {
   return p.title || '未命名 WebApp'
 }
 
-function AgentTestPreview({ data, agentKey }: { data: AgentPreview; agentKey: string }) {
+type AgentTestMessage = { id: number; role: 'user' | 'agent'; text: string; streaming?: boolean }
+
+function AgentTestPreview({
+  data,
+  agentKey,
+  initialView = 'profile',
+  initialAgentMessage,
+  onBack,
+  configureDefaults = true,
+  replyLabel = 'Agent 应用',
+}: {
+  data: AgentPreview
+  agentKey: string
+  initialView?: 'profile' | 'chat'
+  initialAgentMessage?: string
+  onBack?: () => void
+  configureDefaults?: boolean
+  replyLabel?: string
+}) {
   const librarySkills = useSkillLibrary()
   const initialSystemPrompt = `你是「${data.name}」。${data.description}\n\n请理解用户的目标，优先调用已配置的技能，并给出清晰、可执行的回答。`
-  const [view, setView] = useState<'profile' | 'chat'>('profile')
+  const [view, setView] = useState<'profile' | 'chat'>(initialView)
   const [editingPrompt, setEditingPrompt] = useState(false)
   const [systemPrompt, setSystemPrompt] = useState(initialSystemPrompt)
   const [promptDraft, setPromptDraft] = useState(initialSystemPrompt)
@@ -56,10 +74,10 @@ function AgentTestPreview({ data, agentKey }: { data: AgentPreview; agentKey: st
   const [testedSystemPrompt, setTestedSystemPrompt] = useState(initialSystemPrompt)
   const [testedSkillSignature, setTestedSkillSignature] = useState('')
   const [draft, setDraft] = useState('')
-  const [messages, setMessages] = useState<Array<{ id: number; role: 'user' | 'agent'; text: string; streaming?: boolean }>>([])
+  const [messages, setMessages] = useState<AgentTestMessage[]>(() => initialAgentMessage ? [{ id: 1, role: 'agent', text: initialAgentMessage }] : [])
   const [streaming, setStreaming] = useState(false)
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
-  const nextId = useRef(0)
+  const nextId = useRef(initialAgentMessage ? 1 : 0)
   const streamTimerRef = useRef<number | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const clearAnchorRef = useRef<HTMLDivElement>(null)
@@ -113,10 +131,10 @@ function AgentTestPreview({ data, agentKey }: { data: AgentPreview; agentKey: st
     const recommendedSkillIds = /热点|热榜|趋势/.test(context)
       ? ['hotspot', 'trend', 'creator-info']
       : ['creator-info', 'rules', 'trend']
-    ensureAgentDefaultSkills(agentKey, recommendedSkillIds)
+    if (configureDefaults) ensureAgentDefaultSkills(agentKey, recommendedSkillIds)
     setTestedSystemPrompt(initialSystemPrompt)
     setTestedSkillSignature(readSkillLibrary().filter(skill => skill.installed).map(skill => skill.id).sort().join('|'))
-  }, [agentKey, data.name, data.description])
+  }, [agentKey, configureDefaults, data.name, data.description])
 
   useEffect(() => {
     const element = skillScrollRef.current
@@ -137,7 +155,7 @@ function AgentTestPreview({ data, agentKey }: { data: AgentPreview; agentKey: st
     if (!text || streaming) return
     const userId = ++nextId.current
     const agentId = ++nextId.current
-    const reply = Array.from(`收到：「${text}」\n\n这是 Agent 应用的测试回复。你可以继续描述希望它具备的能力。`)
+    const reply = Array.from(`收到：「${text}」\n\n这是${replyLabel}的测试回复。你可以继续描述希望它具备的能力。`)
     let cursor = 0
     setMessages(prev => [
       ...prev,
@@ -324,7 +342,7 @@ function AgentTestPreview({ data, agentKey }: { data: AgentPreview; agentKey: st
     <section className="agent-test" aria-label={data.name}>
       <header className="agent-test-head">
         <div className="agent-test-title">
-          <button type="button" className="agent-back-card" aria-label="返回 Agent 卡片" onClick={() => setView('profile')}><Icon name="arrow-right" cls="ic" /></button>
+          <button type="button" className="agent-back-card" aria-label={onBack ? '返回 Skill 编辑器' : '返回 Agent 卡片'} onClick={() => onBack ? onBack() : setView('profile')}><Icon name="arrow-right" cls="ic" /></button>
           <svg className="agent-bot-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M8 7h8a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3v-6a3 3 0 0 1 3-3Z" />
             <path d="M12 4v3M9 12h.01M15 12h.01M9 16h6M3 12h2M19 12h2" />
@@ -425,6 +443,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   const [skillPublishOfficial, setSkillPublishOfficial] = useState(false)
   const [skillPublishSuccess, setSkillPublishSuccess] = useState(false)
   const [skillAppDirty, setSkillAppDirty] = useState(false)
+  const [skillTestOpen, setSkillTestOpen] = useState(false)
   const [pendingWorkspaceTab, setPendingWorkspaceTab] = useState<WorkspaceTabId | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
@@ -472,6 +491,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   useEffect(() => {
     setSkillPublishOpen(false)
     setSkillAppDirty(false)
+    setSkillTestOpen(false)
     setPendingWorkspaceTab(null)
   }, [appKey])
 
@@ -499,6 +519,15 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     setSkillPublishOfficial(false)
     setSkillPublishSuccess(false)
     setSkillPublishOpen(true)
+  }
+
+  const openSkillTest = () => {
+    if (!data || data.type !== 'skill') return
+    if (skillAppDirty) {
+      skillPreviewRef.current?.save()
+      setSkillAppDirty(false)
+    }
+    setSkillTestOpen(true)
   }
 
   const savePublishedSkill = () => {
@@ -762,7 +791,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
         {shareBlock}
         {data?.type === 'skill' && (
           <button type="button" className="kb-publish-skill-btn" onClick={openSkillPublish}>
-            <Icon name="paper-plane-tilt" cls="ic" /><span>发布 Skill</span>
+            <Icon name="paper-plane-tilt" cls="ic" /><span>发布</span>
           </button>
         )}
       </div>
@@ -889,21 +918,44 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
 
   if (data.type === 'skill') {
     const skillData: SkillAppPreviewData = data
+    const skillTestData: AgentPreview = {
+      type: 'agent',
+      name: skillData.name,
+      description: skillData.description,
+      welcome: '',
+      placeholder: '输入任务',
+    }
     return (
       <div className="kb-wrap kb-wrap-skillapp">
         {workspaceHeader}
-        <SkillAppPreview
-          ref={skillPreviewRef}
-          data={skillData}
-          files={skillFiles}
-          folders={skillFolders}
-          onFilesChange={(files, folders) => {
-            setSkillFilesByApp(current => ({ ...current, [appKey]: files }))
-            setSkillFoldersByApp(current => ({ ...current, [appKey]: folders }))
-            toast('Skill 文件已保存')
-          }}
-          onDirtyChange={setSkillAppDirty}
-        />
+        {skillTestOpen ? (
+          <div className="kb-agent-body skillapp-test-body">
+            <AgentTestPreview
+              key={`${appKey}-skill-test`}
+              data={skillTestData}
+              agentKey={`${appKey}-skill-test`}
+              initialView="chat"
+              initialAgentMessage="您好，我是您刚刚创建的skill，请向我发布任务"
+              onBack={() => setSkillTestOpen(false)}
+              configureDefaults={false}
+              replyLabel="Skill"
+            />
+          </div>
+        ) : (
+          <SkillAppPreview
+            ref={skillPreviewRef}
+            data={skillData}
+            files={skillFiles}
+            folders={skillFolders}
+            onFilesChange={(files, folders) => {
+              setSkillFilesByApp(current => ({ ...current, [appKey]: files }))
+              setSkillFoldersByApp(current => ({ ...current, [appKey]: folders }))
+              toast('Skill 文件已保存')
+            }}
+            onDirtyChange={setSkillAppDirty}
+            onTry={openSkillTest}
+          />
+        )}
         {skillPublishOpen && (
           <div className="skill-publish-mask" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setSkillPublishOpen(false) }}>
             <section className="skill-publish-dialog" role="dialog" aria-modal="true" aria-labelledby="skill-publish-title">
