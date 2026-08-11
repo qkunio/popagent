@@ -24,6 +24,8 @@ interface SharePopoverProps {
   title?: string
   shareUrl?: string
   webpageOnly?: boolean
+  hideInternetShare?: boolean
+  copyLabel?: string
   onCopy?: (url: string) => void
   onInternetShare?: (url: string) => void
 }
@@ -76,6 +78,8 @@ export function SharePopover({
   title = '分享产物',
   shareUrl = 'https://popagent.example.com/share/demo',
   webpageOnly = false,
+  hideInternetShare = false,
+  copyLabel = '内网链接',
   onCopy,
   onInternetShare,
 }: SharePopoverProps) {
@@ -487,23 +491,25 @@ export function SharePopover({
               : (
                 <>
                   <Icon name="copy" cls="ic sh-copy-ic" />
-                  <span>内网链接</span>
+                  <span>{copyLabel}</span>
                 </>
               )}
           </button>
-          <button
-            type="button"
-            className="sh-internet-btn"
-            aria-label="对外分享"
-            onClick={() => {
-              setInternetConfirmOpen(true)
-              setInternetAcknowledged(false)
-              setInternetGenerating(false)
-            }}
-          >
-            <Icon name="export" cls="ic sh-internet-ic" />
-            <span>对外分享</span>
-          </button>
+          {!hideInternetShare && (
+            <button
+              type="button"
+              className="sh-internet-btn"
+              aria-label="对外分享"
+              onClick={() => {
+                setInternetConfirmOpen(true)
+                setInternetAcknowledged(false)
+                setInternetGenerating(false)
+              }}
+            >
+              <Icon name="export" cls="ic sh-internet-ic" />
+              <span>对外分享</span>
+            </button>
+          )}
         </div>
       )}
 
