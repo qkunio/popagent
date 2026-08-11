@@ -889,12 +889,16 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
         </div>
       )}
       <div className="kb-top-right">
-        {shareBlock}
+        {data?.type !== 'skill' && data?.type !== 'agent' && shareBlock}
+        {data?.type === 'webapp' && (
+          <button type="button" className="kb-publish-app-btn" onClick={() => toast('WebApp 发布成功')}>发布</button>
+        )}
+        {data?.type === 'agent' && (
+          <button type="button" className="kb-publish-app-btn" onClick={() => toast('AgentApp 发布成功')}>发布</button>
+        )}
         {data?.type === 'skill' && (
           <div className="skill-publish-anchor" ref={skillPublishAnchorRef}>
-            <button type="button" className="kb-publish-skill-btn" aria-haspopup="dialog" aria-expanded={skillPublishOpen} onClick={() => skillPublishOpen ? setSkillPublishOpen(false) : openSkillPublish()}>
-              <Icon name="paper-plane-tilt" cls="ic" /><span>发布</span>
-            </button>
+            <button type="button" className="kb-publish-app-btn" aria-haspopup="dialog" aria-expanded={skillPublishOpen} onClick={() => skillPublishOpen ? setSkillPublishOpen(false) : openSkillPublish()}>发布</button>
             {skillPublishPopover}
           </div>
         )}

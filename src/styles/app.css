@@ -2432,22 +2432,8 @@ html[data-theme="dark"] .tk-split .tk-preview { background: #14171C; }
 .kb-tab-unsaved-popover button:hover { background: #F5F6F7; color: #1F2329; }
 .kb-tab-unsaved-popover button.save { border-color: #25272C; background: #25272C; color: #FFFFFF; }
 
-.kb-publish-skill-btn {
-  height: 36px;
-  padding: 0 14px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border: 0;
-  border-radius: 8px;
-  background: #202127;
-  color: #FFFFFF;
-  font-size: 13px;
-  font-weight: 650;
-  white-space: nowrap;
-}
-.kb-publish-skill-btn:hover { background: #33353B; }
-.kb-publish-skill-btn .ic { width: 16px; height: 16px; }
+.kb-publish-app-btn { height: 38px; padding: 0 19px; display: inline-flex; align-items: center; justify-content: center; flex: none; border: 0; border-radius: 7px; background: #1F2027; color: #FFFFFF; font-size: 14px; font-weight: 650; white-space: nowrap; cursor: pointer; }
+.kb-publish-app-btn:hover { background: #33353B; }
 .skillapp-test-body { background: #F5F6F7; }
 
 /* SkillApp：根目录文件树 + Markdown 编辑区 */
@@ -2580,8 +2566,6 @@ html[data-theme="dark"] .tk-split .tk-preview { background: #14171C; }
 
 @media (max-width: 760px) {
   .skillapp-preview { grid-template-columns: 160px minmax(0, 1fr); }
-  .kb-publish-skill-btn span { display: none; }
-  .kb-publish-skill-btn { width: 36px; padding: 0; justify-content: center; }
 }
 
 .kb-tool-pane { flex: 1; min-height: 0; overflow-y: auto; padding: 28px; background: #FAFAFB; }
