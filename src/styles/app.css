@@ -2434,6 +2434,13 @@ html[data-theme="dark"] .tk-split .tk-preview { background: #14171C; }
 
 .kb-publish-app-btn { height: 38px; padding: 0 19px; display: inline-flex; align-items: center; justify-content: center; flex: none; border: 0; border-radius: 7px; background: #1F2027; color: #FFFFFF; font-size: 14px; font-weight: 650; white-space: nowrap; cursor: pointer; }
 .kb-publish-app-btn:hover { background: #33353B; }
+.skill-download-anchor { position: relative; }
+.skill-download-popover { position: absolute; top: calc(100% + 8px); right: 0; z-index: 120; width: 250px; padding: 14px; display: flex; align-items: center; gap: 14px; border: 1px solid #E1E3E6; border-radius: 10px; background: #FFFFFF; box-shadow: 0 12px 32px rgba(15,23,42,.18); }
+.skill-download-popover > div { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 3px; }
+.skill-download-popover strong { color: #1F2329; font-size: 13px; }
+.skill-download-popover span { color: #8A9099; font-size: 12px; }
+.skill-download-popover > button { height: 32px; padding: 0 13px; flex: none; border: 0; border-radius: 7px; background: #1F2027; color: #FFFFFF; font-size: 12px; font-weight: 650; cursor: pointer; }
+.skill-download-popover > button:hover { background: #33353B; }
 .skillapp-test-body { background: #F5F6F7; }
 
 /* SkillApp：根目录文件树 + Markdown 编辑区 */

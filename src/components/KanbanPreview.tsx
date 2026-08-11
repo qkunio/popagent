@@ -492,16 +492,21 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   const [skillFilesByApp, setSkillFilesByApp] = useState<Record<string, SkillAppFile[]>>({})
   const [skillFoldersByApp, setSkillFoldersByApp] = useState<Record<string, string[]>>({})
   const [skillPublishOpen, setSkillPublishOpen] = useState(false)
+  const [skillShareOpen, setSkillShareOpen] = useState(false)
   const [skillPublishName, setSkillPublishName] = useState('')
   const [skillPublishDescription, setSkillPublishDescription] = useState('')
   const [skillPublishSuccess, setSkillPublishSuccess] = useState(false)
+  const [agentPublishOpen, setAgentPublishOpen] = useState(false)
+  const [agentPublishSuccess, setAgentPublishSuccess] = useState(false)
   const [skillAppDirty, setSkillAppDirty] = useState(false)
   const [skillTestOpen, setSkillTestOpen] = useState(false)
   const [pendingWorkspaceTab, setPendingWorkspaceTab] = useState<WorkspaceTabId | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
   const shareAnchorRef = useRef<HTMLDivElement>(null)
+  const skillShareAnchorRef = useRef<HTMLDivElement>(null)
   const skillPublishAnchorRef = useRef<HTMLDivElement>(null)
+  const agentPublishAnchorRef = useRef<HTMLDivElement>(null)
   const copyTimerRef = useRef<number | null>(null)
   const approvalTimerRef = useRef<number | null>(null)
   const skillPreviewRef = useRef<SkillAppPreviewHandle>(null)
@@ -525,6 +530,24 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     document.addEventListener('mousedown', closeOnOutsideClick)
     return () => document.removeEventListener('mousedown', closeOnOutsideClick)
   }, [skillPublishOpen])
+
+  useEffect(() => {
+    if (!skillShareOpen) return
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!skillShareAnchorRef.current?.contains(event.target as Node)) setSkillShareOpen(false)
+    }
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    return () => document.removeEventListener('mousedown', closeOnOutsideClick)
+  }, [skillShareOpen])
+
+  useEffect(() => {
+    if (!agentPublishOpen) return
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!agentPublishAnchorRef.current?.contains(event.target as Node)) setAgentPublishOpen(false)
+    }
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    return () => document.removeEventListener('mousedown', closeOnOutsideClick)
+  }, [agentPublishOpen])
 
   useEffect(() => {
     setWebApprovalOpen(false)
@@ -553,6 +576,8 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
 
   useEffect(() => {
     setSkillPublishOpen(false)
+    setSkillShareOpen(false)
+    setAgentPublishOpen(false)
     setSkillAppDirty(false)
     setSkillTestOpen(false)
     setPendingWorkspaceTab(null)
@@ -602,6 +627,12 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     })
     setSkillPublishName(saved.name)
     setSkillPublishSuccess(true)
+  }
+
+  const openAgentPublish = () => {
+    if (!data || data.type !== 'agent') return
+    setAgentPublishSuccess(false)
+    setAgentPublishOpen(true)
   }
 
   const openWorkspaceTab = (tabId: WorkspaceTabId) => {
@@ -780,10 +811,34 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
         anchorRef={shareAnchorRef}
         shareUrl={shareUrl}
         webpageOnly={data?.type === 'sharepage'}
+        hideInternetShare={data?.type === 'agent'}
+        copyLabel={data?.type === 'agent' ? '复制链接' : undefined}
         onInternetShare={onInternetShare ? () => onInternetShare() : undefined}
       />
     </div>
   )
+
+  const skillShareBlock = data?.type === 'skill' ? (
+    <div className="sh-anchor skill-download-anchor" ref={skillShareAnchorRef}>
+      <button
+        type="button"
+        className="kb-share-btn"
+        title="分享"
+        aria-label="分享"
+        aria-haspopup="dialog"
+        aria-expanded={skillShareOpen}
+        onClick={() => setSkillShareOpen(open => !open)}
+      >
+        <Icon name="share-fat" cls="ic kb-share-ic" />
+      </button>
+      {skillShareOpen && (
+        <section className="skill-download-popover" role="dialog" aria-label="下载这个 Skill">
+          <div><strong>下载这个 Skill</strong><span>保存为 ZIP 文件</span></div>
+          <button type="button" onClick={() => { downloadSkillZip(skillPublishName || data.name, skillFiles, skillFolders); setSkillShareOpen(false); toast('ZIP 文件已下载') }}>下载</button>
+        </section>
+      )}
+    </div>
+  ) : null
 
   const skillPublishPopover = skillPublishOpen && data?.type === 'skill' ? (
     <section className="skill-publish-dialog skill-publish-popover" role="dialog" aria-labelledby="skill-publish-title">
@@ -794,7 +849,6 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
           <p>Skill 已发布为官方技能</p>
           <div className="skill-publish-success-actions">
             <button type="button" className="cancel" onClick={() => setSkillPublishOpen(false)}>关闭</button>
-            <button type="button" className="save" onClick={() => downloadSkillZip(skillPublishName, skillFiles, skillFolders)}><Icon name="export" cls="ic" />下载 ZIP 文件</button>
           </div>
         </div>
       ) : (
@@ -819,6 +873,39 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
           <footer>
             <button type="button" className="cancel" onClick={() => setSkillPublishOpen(false)}>取消</button>
             <button type="button" className="save" disabled={!skillPublishName.trim() || !skillPublishDescription.trim()} onClick={savePublishedSkill}>发布</button>
+          </footer>
+        </>
+      )}
+    </section>
+  ) : null
+
+  const agentPublishPopover = agentPublishOpen && data?.type === 'agent' ? (
+    <section className="skill-publish-dialog skill-publish-popover" role="dialog" aria-labelledby="agent-publish-title">
+      {agentPublishSuccess ? (
+        <div className="skill-publish-success">
+          <span className="skill-publish-success-icon"><Icon name="check" cls="ic" /></span>
+          <h2 id="agent-publish-title">发布成功</h2>
+          <p>AgentApp 已发布</p>
+          <div className="skill-publish-success-actions">
+            <button type="button" className="cancel" onClick={() => setAgentPublishOpen(false)}>关闭</button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <header>
+            <div>
+              <span className="skill-publish-icon"><Icon name="chat-circle-text" cls="ic" /></span>
+              <div><h2 id="agent-publish-title">发布 AgentApp</h2><p>确认信息后发布 AgentApp</p></div>
+            </div>
+            <button type="button" className="skill-publish-close" onClick={() => setAgentPublishOpen(false)} aria-label="关闭"><Icon name="x" cls="ic" /></button>
+          </header>
+          <div className="skill-publish-summary" aria-label="AgentApp 发布信息">
+            <div><span>Agent 名称</span><strong>{data.name}</strong></div>
+            <div><span>描述</span><p>{data.description}</p></div>
+          </div>
+          <footer>
+            <button type="button" className="cancel" onClick={() => setAgentPublishOpen(false)}>取消</button>
+            <button type="button" className="save" onClick={() => setAgentPublishSuccess(true)}>发布</button>
           </footer>
         </>
       )}
@@ -889,12 +976,16 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
         </div>
       )}
       <div className="kb-top-right">
-        {data?.type !== 'skill' && data?.type !== 'agent' && shareBlock}
+        {data?.type !== 'skill' && shareBlock}
+        {skillShareBlock}
         {data?.type === 'webapp' && (
           <button type="button" className="kb-publish-app-btn" onClick={() => toast('WebApp 发布成功')}>发布</button>
         )}
         {data?.type === 'agent' && (
-          <button type="button" className="kb-publish-app-btn" onClick={() => toast('AgentApp 发布成功')}>发布</button>
+          <div className="skill-publish-anchor" ref={agentPublishAnchorRef}>
+            <button type="button" className="kb-publish-app-btn" aria-haspopup="dialog" aria-expanded={agentPublishOpen} onClick={() => agentPublishOpen ? setAgentPublishOpen(false) : openAgentPublish()}>发布</button>
+            {agentPublishPopover}
+          </div>
         )}
         {data?.type === 'skill' && (
           <div className="skill-publish-anchor" ref={skillPublishAnchorRef}>

@@ -267,9 +267,11 @@ function mockAIResponse(message: string, skillId?: string): { content: string; t
 
     content = `Agent 应用已经创建好了。
 
-我先搭建了一个可直接测试的对话界面，右侧预览区可以立即输入消息体验；顶部的分享、切换预览和关闭等操作也都保留了。
+我先搭建了一个可直接测试的对话界面，右侧预览区可以立即输入消息体验；顶部的发布、切换预览和关闭等操作也都保留了。
 
-你可以继续告诉我 Agent 的角色、能力或回复风格，我会接着完善。`
+你可以继续告诉我 Agent 的角色、能力或回复风格，我会接着完善。
+
+**AgentApp 这样使用：在输入框输入 @ 即可将 Agent App 集成到其他地方！**`
     trace = [
       { tool: 'define_agent', connector: '应用引擎', label: '应用引擎 · define_agent()', status: 'ok', ms: 120 },
       { tool: 'build_agent_app', connector: '应用引擎', label: '应用引擎 · build_agent_app(热点探查Agent)', status: 'ok', ms: 240 },

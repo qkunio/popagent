@@ -308,21 +308,6 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
                   <div className="s-body">
                     <div className="s-bubble">
                       <Markdown text={m.content} />
-                      {m.app_preview && (
-                        <button
-                          type="button"
-                          className="s-app-flag s-app-flag-btn"
-                          onClick={() => {
-                            if (taskId) sessionStorage.removeItem('previewClosed:' + taskId)
-                            setPreviewOpen(true)
-                          }}
-                          title="点击在右侧打开应用预览"
-                        >
-                          <Icon name="squares-four" cls="ic-s ic" />
-                          <span>已生成应用预览 · 点击打开</span>
-                          <Icon name="arrow-right" cls="ic-s ic s-app-arrow" />
-                        </button>
-                      )}
                     </div>
                     {m.streaming && <span className="s-caret" />}
                   </div>
