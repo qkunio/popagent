@@ -250,7 +250,7 @@ function mockAIResponse(message: string, skillId?: string): { content: string; t
         },
       ],
     }
-    content = `SkillApp 已经创建好了。\n\n右侧可以直接查看和编辑 \`SKILL.md\`，并通过文件树打开它引用的 SOP 与参考文件。完成后可点击右上角“发布”，保存到技能库。`
+    content = `SkillApp 已经创建好了，并已自动保存到技能库的“我的”。\n\n右侧可以直接查看和编辑 \`SKILL.md\`，并通过文件树打开它引用的 SOP 与参考文件。完成后可点击右上角“发布”，发布为官方技能。`
     trace = [
       { tool: 'define_skill', connector: '应用引擎', label: '应用引擎 · define_skill()', status: 'ok', ms: 120 },
       { tool: 'build_skill_app', connector: '应用引擎', label: `应用引擎 · build_skill_app(${skillName})`, status: 'ok', ms: 220 },

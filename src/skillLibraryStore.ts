@@ -39,7 +39,7 @@ const DEFAULT_SKILLS: LibrarySkill[] = [
 export function readSkillLibrary(): LibrarySkill[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return JSON.parse(raw) as LibrarySkill[]
+    if (raw) return (JSON.parse(raw) as Array<Omit<LibrarySkill, 'owner'> & { owner: LibrarySkill['owner'] | 'space' }>).map(skill => ({ ...skill, owner: skill.owner === 'space' ? 'official' : skill.owner }))
   } catch {}
   return DEFAULT_SKILLS.map(skill => ({ ...skill }))
 }
@@ -69,9 +69,12 @@ export function addSkillToLibrary(): LibrarySkill {
   return skill
 }
 
-export function publishSkillToLibrary(input: { name: string; description: string; files: Array<{ path: string; content: string }>; folders?: string[]; official?: boolean }): LibrarySkill {
+type SkillLibraryWriteInput = { name: string; description: string; files: Array<{ path: string; content: string }>; folders?: string[] }
+
+export function ensureCreatedSkillInLibrary(input: SkillLibraryWriteInput): LibrarySkill {
   const skills = readSkillLibrary()
-  const existing = skills.find(skill => skill.owner === 'mine' && skill.name === input.name)
+  const existing = skills.find(skill => skill.name === input.name)
+  if (existing?.owner === 'official') return existing
   const skill: LibrarySkill = {
     id: existing?.id || `published-skill-${Date.now()}`,
     name: input.name,
@@ -79,7 +82,24 @@ export function publishSkillToLibrary(input: { name: string; description: string
     detail: input.files.find(file => file.path === 'SKILL.md')?.content || input.description,
     files: input.files.map(file => ({ ...file })),
     folders: [...(input.folders || [])],
-    owner: input.official ? 'official' : 'mine',
+    owner: 'mine',
+    installed: true,
+  }
+  writeSkillLibrary([skill, ...skills.filter(item => item.id !== skill.id)])
+  return skill
+}
+
+export function publishSkillToLibrary(input: SkillLibraryWriteInput): LibrarySkill {
+  const skills = readSkillLibrary()
+  const existing = skills.find(skill => skill.name === input.name)
+  const skill: LibrarySkill = {
+    id: existing?.id || `published-skill-${Date.now()}`,
+    name: input.name,
+    description: input.description,
+    detail: input.files.find(file => file.path === 'SKILL.md')?.content || input.description,
+    files: input.files.map(file => ({ ...file })),
+    folders: [...(input.folders || [])],
+    owner: 'official',
     installed: true,
   }
   writeSkillLibrary([skill, ...skills.filter(item => item.id !== skill.id)])
@@ -95,7 +115,7 @@ export function toggleLibrarySkillInstalled(skillId: string) {
 }
 
 export function ensureAgentDefaultSkills(agentKey: string, skillIds: string[]) {
-  const markerKey = `popagent:agent-default-skills:${agentKey}`
+  const markerKey = `popagent:agent-default-skills:v2:${agentKey}`
   if (localStorage.getItem(markerKey)) return
   const skillIdSet = new Set(skillIds)
   const skills = readSkillLibrary()
