@@ -9,6 +9,8 @@ import type { AppPreviewItem } from '../views/TaskView'
 import { ensureAgentDefaultSkills, publishSkillToLibrary, readSkillLibrary, toggleLibrarySkillInstalled, useSkillLibrary } from '../skillLibraryStore'
 import { downloadSkillZip } from '../skillZip'
 
+const UPDATED_OFFICIAL_SKILL_IDS = new Set(['creator-info', 'trend'])
+
 interface Props {
   data: AppPreview | null
   empty?: string
@@ -71,6 +73,8 @@ function AgentTestPreview({
   const [skillFilterOpen, setSkillFilterOpen] = useState(false)
   const [skillSearchOpen, setSkillSearchOpen] = useState(false)
   const [skillQuery, setSkillQuery] = useState('')
+  const [updateConfirmSkillId, setUpdateConfirmSkillId] = useState<string | null>(null)
+  const [updatedSkillIds, setUpdatedSkillIds] = useState<string[]>([])
   const [testedSystemPrompt, setTestedSystemPrompt] = useState(initialSystemPrompt)
   const [testedSkillSignature, setTestedSkillSignature] = useState('')
   const [draft, setDraft] = useState('')
@@ -329,7 +333,14 @@ function AgentTestPreview({
                     return (
                       <article className="skill-library-card agent-library-skill-card clickable" key={skill.id} role="button" tabIndex={0} onClick={() => setDetailSkillId(skill.id)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') setDetailSkillId(skill.id) }}>
                         <div className="agent-skill-copy">
-                          <h3 title={skill.name}>{skill.name}</h3>
+                          <div className="agent-skill-name-row">
+                            <h3 title={skill.name}>{skill.name}</h3>
+                            {skill.owner === 'official' && UPDATED_OFFICIAL_SKILL_IDS.has(skill.id) && !updatedSkillIds.includes(skill.id) && (
+                              <button type="button" className="agent-skill-update-badge" title="更新官方技能" aria-label={`更新${skill.name}`} onClick={event => { event.stopPropagation(); setUpdateConfirmSkillId(skill.id) }}>
+                                <span>可更新</span><Icon name="arrow-clockwise" cls="ic" />
+                              </button>
+                            )}
+                          </div>
                           <span className="agent-skill-inline-action">
                             <button type="button" className={'skill-install agent-skill-toggle' + (selected ? ' installed' : '')} title={selected ? '已添加' : '添加'} aria-label={selected ? `移除${skill.name}` : `添加${skill.name}`} onClick={event => { event.stopPropagation(); toggleSkill(skill.id) }} aria-pressed={selected}>
                               <Icon name={selected ? 'check' : 'plus'} cls="ic" />
@@ -352,6 +363,17 @@ function AgentTestPreview({
           </article>
         </div>
         <SkillDetailDialog skill={librarySkills.find(skill => skill.id === detailSkillId) || null} onClose={() => setDetailSkillId(null)} />
+        {updateConfirmSkillId && (
+          <div className="agent-skill-update-mask" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setUpdateConfirmSkillId(null) }}>
+            <section className="agent-skill-update-confirm" role="dialog" aria-modal="true" aria-label="确认更新技能">
+              <h3>是否更新「{librarySkills.find(skill => skill.id === updateConfirmSkillId)?.name || ''}」？旧版本可能无法找回</h3>
+              <div>
+                <button type="button" className="confirm" onClick={() => { setUpdatedSkillIds(current => [...current, updateConfirmSkillId]); setUpdateConfirmSkillId(null) }}>确认</button>
+                <button type="button" onClick={() => setUpdateConfirmSkillId(null)}>取消</button>
+              </div>
+            </section>
+          </div>
+        )}
       </section>
     )
   }
@@ -387,8 +409,11 @@ function AgentTestPreview({
             aria-expanded={clearConfirmOpen}
             onClick={requestClearMessages}
           >
-            <svg className="agent-plus-circle" viewBox="0 0 256 256" aria-hidden="true">
-              <path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm48-88a8,8,0,0,1-8,8H136v32a8,8,0,0,1-16,0V136H88a8,8,0,0,1,0-16h32V88a8,8,0,0,1,16,0v32h32A8,8,0,0,1,176,128Z" />
+            <svg className="agent-brush-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M10 11V4.5a2 2 0 0 1 4 0V11" />
+              <path d="M6.7 11h10.6l2.5 4H4.2l2.5-4Z" />
+              <path d="M5 15v2.2c0 1.6-.6 2.8-1.5 3.8h17c-.9-1-1.5-2.2-1.5-3.8V15" />
+              <path d="m8.2 17.5-.3 3.3M12 17.5v3.3M15.8 17.5l.3 3.3" />
             </svg>
           </button>
           {clearConfirmOpen && (
@@ -469,7 +494,6 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   const [skillPublishOpen, setSkillPublishOpen] = useState(false)
   const [skillPublishName, setSkillPublishName] = useState('')
   const [skillPublishDescription, setSkillPublishDescription] = useState('')
-  const [skillPublishOfficial, setSkillPublishOfficial] = useState(false)
   const [skillPublishSuccess, setSkillPublishSuccess] = useState(false)
   const [skillAppDirty, setSkillAppDirty] = useState(false)
   const [skillTestOpen, setSkillTestOpen] = useState(false)
@@ -477,6 +501,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   const menuRef = useRef<HTMLDivElement>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
   const shareAnchorRef = useRef<HTMLDivElement>(null)
+  const skillPublishAnchorRef = useRef<HTMLDivElement>(null)
   const copyTimerRef = useRef<number | null>(null)
   const approvalTimerRef = useRef<number | null>(null)
   const skillPreviewRef = useRef<SkillAppPreviewHandle>(null)
@@ -491,6 +516,15 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     document.addEventListener('mousedown', onClick)
     return () => document.removeEventListener('mousedown', onClick)
   }, [menuOpen, addMenuOpen])
+
+  useEffect(() => {
+    if (!skillPublishOpen) return
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!skillPublishAnchorRef.current?.contains(event.target as Node)) setSkillPublishOpen(false)
+    }
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    return () => document.removeEventListener('mousedown', closeOnOutsideClick)
+  }, [skillPublishOpen])
 
   useEffect(() => {
     setWebApprovalOpen(false)
@@ -545,7 +579,6 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     if (!data || data.type !== 'skill') return
     setSkillPublishName(data.name)
     setSkillPublishDescription(data.description)
-    setSkillPublishOfficial(false)
     setSkillPublishSuccess(false)
     setSkillPublishOpen(true)
   }
@@ -566,7 +599,6 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
       description: skillPublishDescription.trim(),
       files: skillFiles,
       folders: skillFolders,
-      official: skillPublishOfficial,
     })
     setSkillPublishName(saved.name)
     setSkillPublishSuccess(true)
@@ -753,6 +785,46 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     </div>
   )
 
+  const skillPublishPopover = skillPublishOpen && data?.type === 'skill' ? (
+    <section className="skill-publish-dialog skill-publish-popover" role="dialog" aria-labelledby="skill-publish-title">
+      {skillPublishSuccess ? (
+        <div className="skill-publish-success">
+          <span className="skill-publish-success-icon"><Icon name="check" cls="ic" /></span>
+          <h2 id="skill-publish-title">发布成功</h2>
+          <p>Skill 已发布为官方技能</p>
+          <div className="skill-publish-success-actions">
+            <button type="button" className="cancel" onClick={() => setSkillPublishOpen(false)}>关闭</button>
+            <button type="button" className="save" onClick={() => downloadSkillZip(skillPublishName, skillFiles, skillFolders)}><Icon name="export" cls="ic" />下载 ZIP 文件</button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <header>
+            <div>
+              <span className="skill-publish-icon"><Icon name="lightning" cls="ic" /></span>
+              <div><h2 id="skill-publish-title">发布 Skill</h2><p>创建后已自动保存到“我的”，发布后将成为官方技能</p></div>
+            </div>
+            <button type="button" className="skill-publish-close" onClick={() => setSkillPublishOpen(false)} aria-label="关闭"><Icon name="x" cls="ic" /></button>
+          </header>
+          <div className="skill-publish-summary" aria-label="Skill 发布信息">
+            <div>
+              <span>Skill 名称</span>
+              <strong>{skillPublishName}</strong>
+            </div>
+            <div>
+              <span>描述</span>
+              <p>{skillPublishDescription}</p>
+            </div>
+          </div>
+          <footer>
+            <button type="button" className="cancel" onClick={() => setSkillPublishOpen(false)}>取消</button>
+            <button type="button" className="save" disabled={!skillPublishName.trim() || !skillPublishDescription.trim()} onClick={savePublishedSkill}>发布</button>
+          </footer>
+        </>
+      )}
+    </section>
+  ) : null
+
   const workspaceHeader = (
     <header className="kb-top kb-workspace-top">
       {renderAppSwitcher()}
@@ -819,9 +891,12 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
       <div className="kb-top-right">
         {shareBlock}
         {data?.type === 'skill' && (
-          <button type="button" className="kb-publish-skill-btn" onClick={openSkillPublish}>
-            <Icon name="paper-plane-tilt" cls="ic" /><span>发布</span>
-          </button>
+          <div className="skill-publish-anchor" ref={skillPublishAnchorRef}>
+            <button type="button" className="kb-publish-skill-btn" aria-haspopup="dialog" aria-expanded={skillPublishOpen} onClick={() => skillPublishOpen ? setSkillPublishOpen(false) : openSkillPublish()}>
+              <Icon name="paper-plane-tilt" cls="ic" /><span>发布</span>
+            </button>
+            {skillPublishPopover}
+          </div>
         )}
       </div>
     </header>
@@ -984,46 +1059,6 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
             onDirtyChange={setSkillAppDirty}
             onTry={openSkillTest}
           />
-        )}
-        {skillPublishOpen && (
-          <div className="skill-publish-mask" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setSkillPublishOpen(false) }}>
-            <section className="skill-publish-dialog" role="dialog" aria-modal="true" aria-labelledby="skill-publish-title">
-              {skillPublishSuccess ? (
-                <div className="skill-publish-success">
-                  <span className="skill-publish-success-icon"><Icon name="check" cls="ic" /></span>
-                  <h2 id="skill-publish-title">保存成功</h2>
-                  <p>Skill 已保存到技能库，默认仅你可见</p>
-                  <div className="skill-publish-success-actions">
-                    <button type="button" className="cancel" onClick={() => setSkillPublishOpen(false)}>关闭</button>
-                    <button type="button" className="save" onClick={() => downloadSkillZip(skillPublishName, skillFiles, skillFolders)}><Icon name="export" cls="ic" />下载 ZIP 文件</button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <header>
-                    <div>
-                      <span className="skill-publish-icon"><Icon name="lightning" cls="ic" /></span>
-                      <div><h2 id="skill-publish-title">发布 Skill</h2><p>发布后会保存到技能库，默认仅你可见</p></div>
-                    </div>
-                    <button type="button" className="skill-publish-close" onClick={() => setSkillPublishOpen(false)} aria-label="关闭"><Icon name="x" cls="ic" /></button>
-                  </header>
-                  <div className="skill-publish-form">
-                    <label><span>Skill 名称</span><input value={skillPublishName} onChange={event => setSkillPublishName(event.target.value)} /></label>
-                    <label><span>描述</span><textarea value={skillPublishDescription} onChange={event => setSkillPublishDescription(event.target.value)} rows={3} /></label>
-                    <label className="skill-publish-option">
-                      <input type="checkbox" checked={skillPublishOfficial} onChange={event => setSkillPublishOfficial(event.target.checked)} />
-                      <span className="skill-publish-checkbox"><Icon name="check" cls="ic" /></span>
-                      <strong>注册为官方技能</strong><em>仅 admin 可见</em>
-                    </label>
-                  </div>
-                  <footer>
-                    <button type="button" className="cancel" onClick={() => setSkillPublishOpen(false)}>取消</button>
-                    <button type="button" className="save" disabled={!skillPublishName.trim() || !skillPublishDescription.trim()} onClick={savePublishedSkill}>保存</button>
-                  </footer>
-                </>
-              )}
-            </section>
-          </div>
         )}
       </div>
     )
