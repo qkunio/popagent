@@ -7,6 +7,7 @@ import { SharePopover } from '../components/SharePopover'
 import { api, streamChat } from '../api'
 import type { AppState } from '../App'
 import type { AppPreview } from '../types'
+import { ensureCreatedSkillInLibrary } from '../skillLibraryStore'
 
 export interface AppPreviewItem {
   id: string
@@ -73,6 +74,18 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
   }, [apps, currentAppId])
 
   const currentPreview: AppPreview | null = currentApp?.preview || null
+
+  useEffect(() => {
+    apps.forEach(app => {
+      if (app.preview.type !== 'skill') return
+      ensureCreatedSkillInLibrary({
+        name: app.preview.name,
+        description: app.preview.description,
+        files: app.preview.files,
+        folders: app.preview.folders,
+      })
+    })
+  }, [apps])
 
   useEffect(() => {
     if (!taskId || apps.length === 0) return
