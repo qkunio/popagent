@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from './Icon'
 import type { Skill, Connector } from '../types'
 import { api } from '../api'
-import { useSkillLibrary } from '../skillLibraryStore'
 
 interface ComposerProps {
   placeholder: string
@@ -17,15 +16,13 @@ interface ComposerProps {
   progress?: number
 }
 
-type MentionCategory = 'author' | 'work' | 'skill' | 'agent' | 'web'
+type MentionCategory = 'author' | 'work' | 'agent'
 type MentionItem = { id: string; category: MentionCategory; label: string; detail?: string }
 
 const MENTION_CATEGORIES: Array<{ id: MentionCategory; label: string }> = [
   { id: 'author', label: '作者' },
   { id: 'work', label: '作品' },
-  { id: 'skill', label: 'Skill' },
   { id: 'agent', label: 'Agent' },
-  { id: 'web', label: 'Web' },
 ]
 
 const STATIC_MENTIONS: Record<'author' | 'work', MentionItem[]> = {
@@ -59,7 +56,6 @@ export function Composer(props: ComposerProps) {
   const composerRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const savedRangeRef = useRef<Range | null>(null)
-  const librarySkills = useSkillLibrary()
   const [fileType, setFileType] = useState('默认')
   const [perm, setPerm] = useState('默认权限')
   const [model, setModel] = useState('GPT5.5')
@@ -89,10 +85,8 @@ export function Composer(props: ComposerProps) {
 
   const mentionOptions = useMemo<MentionItem[]>(() => {
     if (mentionCategory === 'author' || mentionCategory === 'work') return STATIC_MENTIONS[mentionCategory]
-    if (mentionCategory === 'skill') return librarySkills.map(skill => ({ id: skill.id, category: 'skill', label: skill.name, detail: skill.description }))
-    if (mentionCategory === 'agent') return generatedApps.filter(app => app.type === 'agentapp').map(app => ({ id: app.id, category: 'agent', label: app.title, detail: app.description }))
-    return generatedApps.filter(app => app.type === 'webapp').map(app => ({ id: app.id, category: 'web', label: app.title, detail: app.description }))
-  }, [generatedApps, librarySkills, mentionCategory])
+    return generatedApps.filter(app => app.type === 'agentapp').map(app => ({ id: app.id, category: 'agent', label: app.title, detail: app.description }))
+  }, [generatedApps, mentionCategory])
 
   const visibleMentionOptions = useMemo(() => {
     const keyword = mentionQuery.trim().toLowerCase()
@@ -254,7 +248,7 @@ export function Composer(props: ComposerProps) {
             <div className="mention-result-list">
               {visibleMentionOptions.length ? visibleMentionOptions.map(item => (
                 <button type="button" key={`${item.category}:${item.id}`} onClick={() => selectMention(item)}>
-                  <span className={'mention-result-icon ' + item.category}>{item.category === 'author' ? item.label.slice(0, 1) : <Icon name={item.category === 'work' ? 'code' : item.category === 'skill' ? 'lightning' : item.category === 'agent' ? 'chat-circle-text' : 'columns'} cls="ic" />}</span>
+                  <span className={'mention-result-icon ' + item.category}>{item.category === 'author' ? item.label.slice(0, 1) : <Icon name={item.category === 'work' ? 'code' : 'chat-circle-text'} cls="ic" />}</span>
                   <span className="mention-result-copy"><strong>{item.label}</strong>{item.detail && <small>{item.detail}</small>}</span>
                 </button>
               )) : <div className="mention-empty">输入关键词搜索{MENTION_CATEGORIES.find(category => category.id === mentionCategory)?.label}</div>}
