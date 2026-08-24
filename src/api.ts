@@ -224,10 +224,54 @@ function mockAIResponse(message: string, skillId?: string): { content: string; t
   let app_preview: AppPreview | undefined | null = null
 
   const triggersAgentApp = /做一个\s*agent\s*app/i.test(message)
+  const triggersScriptApp = /做一个\s*script\s*app/i.test(message)
   const triggersSkillApp = /做一个\s*skill(?:\s*app)?/i.test(message)
   const triggersSharePage = message.includes('做一个对外链接')
   const triggersWebApp = /做一个\s*web\s*app/i.test(message)
-  if (triggersSkillApp) {
+  const mentionedPermissionLevels = Array.from(new Set(
+    Array.from(message.matchAll(/[Ll]([23])/g), match => `L${match[1]}`),
+  )).sort()
+  const permissionRequestLevels = /获取/.test(message) && /数据/.test(message) ? mentionedPermissionLevels : []
+  const permissionContinueLevels = /权限通过了[，,]?请你继续/i.test(message) ? mentionedPermissionLevels : []
+  if (permissionContinueLevels.length > 0) {
+    const levelLabel = permissionContinueLevels.join('、')
+    content = `${levelLabel} 数据权限已生效，我会继续执行刚才的数据获取任务。\n\n已完成权限校验，正在按申请范围读取数据并整理结果。`
+    trace = [
+      { tool: 'check_data_permission', connector: '权限中心', label: `权限中心 · check(${levelLabel})`, status: 'ok', ms: 95 },
+      { tool: 'resume_task', connector: '任务引擎', label: '任务引擎 · resume()', status: 'ok', ms: 160 },
+    ]
+  } else if (permissionRequestLevels.length > 0) {
+    const levelLabel = permissionRequestLevels.join('、')
+    const permissionNotes = permissionRequestLevels.map(level => level === 'L2'
+      ? 'L2 数据申请需告知你的 +1。'
+      : 'L3 数据申请需由你的 +1 审批。').join('\n')
+    content = `当前账号尚未获得 ${levelLabel} 数据权限。\n\n${permissionNotes}\n\n请点击下方按钮申请 ${levelLabel} 数据权限。`
+    trace = [
+      { tool: 'check_data_permission', connector: '权限中心', label: `权限中心 · check(${levelLabel})`, status: 'err', ms: 88 },
+    ]
+  } else if (triggersScriptApp) {
+    const scriptName = '文本摘要与关键词提取'
+    app_preview = {
+      type: 'script',
+      name: scriptName,
+      description: '输入一段文本，自动生成摘要、关键词和情感判断。',
+      inputs: [
+        { name: 'text', type: 'string', required: true, description: '需要分析的文本内容', placeholder: '输入 string...' },
+        { name: 'max_keywords', type: 'integer', description: '提取关键词的最大数量（默认 5）', defaultValue: '5' },
+      ],
+      outputs: [
+        { name: 'summary', type: 'string', description: '文本摘要' },
+        { name: 'keywords', type: 'array', description: '关键词数组' },
+        { name: 'sentiment', type: 'string', description: '情感判断' },
+      ],
+    }
+    content = `status=completed，Script App 构建成功。\n\n应用信息\n\n- 名称：${scriptName}（app_id=16222）\n- 输入：text（待分析文本）、max_keywords（关键词数量，默认 5）\n- 输出：summary（摘要）、keywords（关键词数组）、sentiment（情感判断）\n\n实现要点\n\n- 通过一次模型调用完成摘要、关键词提取和情感判断\n- 输入参数已生成校验，右侧可以直接运行测试。`
+    trace = [
+      { tool: 'define_script', connector: '应用引擎', label: '应用引擎 · define_script()', status: 'ok', ms: 120 },
+      { tool: 'build_script_app', connector: '应用引擎', label: `应用引擎 · build_script_app(${scriptName})`, status: 'ok', ms: 240 },
+      { tool: 'open_preview', connector: '应用引擎', label: '应用引擎 · open_preview()', status: 'ok', ms: 60 },
+    ]
+  } else if (triggersSkillApp) {
     const skillName = '热点内容探查'
     const skillDescription = '发现并整理近期热点，输出可验证的选题方向与执行步骤。'
     app_preview = {
@@ -610,7 +654,7 @@ export const api = {
     const s = loadStore()
     const taskById = new Map(s.tasks.map(task => [task.id, task]))
     return s.messages
-      .filter(message => message.app_preview?.type === 'webapp' || message.app_preview?.type === 'agent' || message.app_preview?.type === 'skill')
+      .filter(message => message.app_preview?.type === 'webapp' || message.app_preview?.type === 'agent' || message.app_preview?.type === 'skill' || message.app_preview?.type === 'script')
       .map(message => {
         const preview = message.app_preview!
         const task = taskById.get(message.task_id)
@@ -633,6 +677,17 @@ export const api = {
             type: 'agentapp' as const,
             title: preview.name || task?.title || 'Agent 应用',
             description: preview.description || '可直接对话测试的 Agent 应用',
+            createdAt: message.created_at,
+          }
+        }
+        if (preview.type === 'script') {
+          return {
+            id: `${message.task_id}:${message.id}`,
+            taskId: message.task_id,
+            messageId: message.id,
+            type: 'scriptapp' as const,
+            title: preview.name || task?.title || 'Script App',
+            description: preview.description || '可直接运行的 Script 应用',
             createdAt: message.created_at,
           }
         }
