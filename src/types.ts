@@ -102,13 +102,21 @@ export interface SkillAppPreview {
   files: SkillAppFile[]
 }
 
-export type AppPreview = KanbanPreview | WebpagePreview | AgentPreview | SkillAppPreview
+export interface ScriptAppPreview {
+  type: 'script'
+  name: string
+  description: string
+  inputs: Array<{ name: string; type: 'string' | 'integer'; required?: boolean; description: string; placeholder?: string; defaultValue?: string }>
+  outputs: Array<{ name: string; type: string; description: string }>
+}
+
+export type AppPreview = KanbanPreview | WebpagePreview | AgentPreview | SkillAppPreview | ScriptAppPreview
 
 export interface GeneratedApp {
   id: string
   taskId: string
   messageId: string
-  type: 'webapp' | 'agentapp' | 'skillapp'
+  type: 'webapp' | 'agentapp' | 'skillapp' | 'scriptapp'
   title: string
   description: string
   createdAt: number

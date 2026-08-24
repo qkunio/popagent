@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { Icon } from './Icon'
 import type { SkillAppFile, SkillAppPreview as SkillAppPreviewData } from '../types'
+import { readPreviewSession, updatePreviewSession, type SkillAppSessionState } from '../previewSessionStore'
 
 interface Props {
   data: SkillAppPreviewData
@@ -9,6 +10,7 @@ interface Props {
   onFilesChange: (files: SkillAppFile[], folders: string[]) => void
   onDirtyChange?: (dirty: boolean) => void
   onTry?: () => void
+  persistenceKey: string
 }
 
 export interface SkillAppPreviewHandle {
@@ -23,26 +25,36 @@ type DraggingItem = { kind: 'file' | 'folder'; path: string } | null
 const baseName = (path: string) => path.split('/').pop() || path
 const parentPath = (path: string) => path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : ''
 
-export const SkillAppPreview = forwardRef<SkillAppPreviewHandle, Props>(function SkillAppPreview({ data, files, folders, onFilesChange, onDirtyChange, onTry }, ref) {
-  const [selectedPath, setSelectedPath] = useState('SKILL.md')
-  const [draftFiles, setDraftFiles] = useState<SkillAppFile[]>(files)
-  const [draftFolders, setDraftFolders] = useState<string[]>(folders)
-  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({ sop: true, references: true })
-  const [creating, setCreating] = useState<CreatingItem>(null)
-  const [createName, setCreateName] = useState('')
-  const [editing, setEditing] = useState<EditingItem>(null)
+export const SkillAppPreview = forwardRef<SkillAppPreviewHandle, Props>(function SkillAppPreview({ data, files, folders, onFilesChange, onDirtyChange, onTry, persistenceKey }, ref) {
+  const restoredEditor = useMemo(() => readPreviewSession<SkillAppSessionState>('skill', persistenceKey)?.editor || null, [persistenceKey])
+  const [selectedPath, setSelectedPath] = useState(restoredEditor?.selectedPath || 'SKILL.md')
+  const [draftFiles, setDraftFiles] = useState<SkillAppFile[]>(restoredEditor?.draftFiles || files)
+  const [draftFolders, setDraftFolders] = useState<string[]>(restoredEditor?.draftFolders || folders)
+  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>(restoredEditor?.expandedFolders || { sop: true, references: true })
+  const [creating, setCreating] = useState<CreatingItem>(restoredEditor?.creating || null)
+  const [createName, setCreateName] = useState(restoredEditor?.createName || '')
+  const [editing, setEditing] = useState<EditingItem>(restoredEditor?.editing || null)
   const [menuKey, setMenuKey] = useState<string | null>(null)
   const [draggingItem, setDraggingItem] = useState<DraggingItem>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
-  const [pendingFilePath, setPendingFilePath] = useState<string | null>(null)
+  const [pendingFilePath, setPendingFilePath] = useState<string | null>(restoredEditor?.pendingFilePath || null)
   const createInputRef = useRef<HTMLInputElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setDraftFiles(files)
-    setDraftFolders(folders)
-    if (!files.some(file => file.path === selectedPath)) setSelectedPath(files[0]?.path || '')
-  }, [data.name, files, folders])
+    updatePreviewSession<SkillAppSessionState>('skill', persistenceKey, {
+      editor: {
+        selectedPath,
+        draftFiles,
+        draftFolders,
+        expandedFolders,
+        creating,
+        createName,
+        editing,
+        pendingFilePath,
+      },
+    })
+  }, [persistenceKey, selectedPath, draftFiles, draftFolders, expandedFolders, creating, createName, editing, pendingFilePath])
 
   useEffect(() => { if (creating) createInputRef.current?.focus() }, [creating])
   useEffect(() => { if (editing) editInputRef.current?.focus() }, [editing])

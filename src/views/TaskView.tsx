@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useLayoutEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { Icon, useToast } from '../components/Icon'
 import { Composer } from '../components/Composer'
 import { Markdown } from '../components/Markdown'
@@ -16,6 +17,19 @@ export interface AppPreviewItem {
   createdAt: number
 }
 
+type PermissionLevel = 'L2' | 'L3'
+
+const PERMISSION_LEVEL_DETAILS: Record<PermissionLevel, { method: string; domains: string[] }> = {
+  L2: {
+    method: '告知 +1',
+    domains: ['作者-播放数据', '作品-互动数据', '粉丝-画像数据'],
+  },
+  L3: {
+    method: '向 +1 申请',
+    domains: ['作者-收入数据', '作品-分发数据', '账号-运营数据'],
+  },
+}
+
 export function TaskView({ state, taskId }: { state: AppState; taskId: string | null }) {
   const [task, setTask] = useState<any>(null)
   const [msgs, setMsgs] = useState<any[]>([])
@@ -25,6 +39,9 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
   const [previewOpen, setPreviewOpen] = useState(false)
   const [currentAppId, setCurrentAppId] = useState<string | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
+  const [permissionRequest, setPermissionRequest] = useState<{ levels: PermissionLevel[]; messageId: string } | null>(null)
+  const [permissionAutoContinue, setPermissionAutoContinue] = useState(true)
+  const [permissionStatus, setPermissionStatus] = useState<'ready' | 'submitting' | 'approved'>('ready')
   const laneRef = useRef<HTMLDivElement>(null)
   const shareAnchorRef = useRef<HTMLDivElement>(null)
   const toast = useToast()
@@ -34,6 +51,11 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
   const lastContentRef = useRef('')
   const scrollAnchorRef = useRef<HTMLDivElement>(null)
   const rafRef = useRef<number | null>(null)
+  const permissionTimerRef = useRef<number | null>(null)
+
+  useEffect(() => () => {
+    if (permissionTimerRef.current !== null) window.clearTimeout(permissionTimerRef.current)
+  }, [])
 
   const scrollToBottom = (smooth = false) => {
     const el = scrollAnchorRef.current
@@ -76,6 +98,10 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
   const currentPreview: AppPreview | null = currentApp?.preview || null
 
   useEffect(() => {
+    setCurrentAppId(null)
+  }, [taskId])
+
+  useEffect(() => {
     apps.forEach(app => {
       if (app.preview.type !== 'skill') return
       ensureCreatedSkillInLibrary({
@@ -97,6 +123,16 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
     setPreviewOpen(true)
     sessionStorage.removeItem('targetAppMessage:' + taskId)
   }, [apps, taskId])
+
+  useEffect(() => {
+    if (!taskId || currentAppId) return
+    const restoredAppId = sessionStorage.getItem('previewCurrentApp:' + taskId)
+    if (restoredAppId && apps.some(app => app.id === restoredAppId)) setCurrentAppId(restoredAppId)
+  }, [apps, currentAppId, taskId])
+
+  useEffect(() => {
+    if (taskId && currentAppId) sessionStorage.setItem('previewCurrentApp:' + taskId, currentAppId)
+  }, [currentAppId, taskId])
 
   useEffect(() => {
     if (!taskId) return
@@ -253,6 +289,36 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
     runChatInternal(text, matched?.id, mode, version, aborted)
   }
 
+  const openPermissionRequest = (levels: PermissionLevel[], messageId: string) => {
+    setPermissionRequest({ levels, messageId })
+    setPermissionAutoContinue(true)
+    setPermissionStatus('ready')
+  }
+
+  const submitPermissionRequest = () => {
+    if (!permissionRequest || permissionStatus !== 'ready') return
+    const levelLabel = permissionRequest.levels.join('、')
+    setPermissionStatus('submitting')
+    permissionTimerRef.current = window.setTimeout(() => {
+      setPermissionStatus('approved')
+      permissionTimerRef.current = window.setTimeout(() => {
+        setPermissionRequest(null)
+        setPermissionStatus('ready')
+        permissionTimerRef.current = null
+        if (permissionAutoContinue) send(`${levelLabel}权限通过了，请你继续`)
+        else toast(`${levelLabel} 权限已通过`)
+      }, 900)
+    }, 1400)
+  }
+
+  const permissionLevelsForMessage = (message: any): PermissionLevel[] | null => {
+    if (message?.role !== 'assistant' || !/请点击下方按钮申请/.test(message.content || '')) return null
+    const levels = Array.from(new Set(
+      Array.from((message.content || '').matchAll(/L([23])/g), (match: RegExpMatchArray) => `L${match[1]}` as PermissionLevel),
+    )).sort()
+    return levels.length > 0 ? levels : null
+  }
+
   const startInternetShare = () => {
     const prompt = '做一个对外链接'
     setShareOpen(false)
@@ -300,7 +366,9 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
           </header>
           <div className="conv-simple">
             <div className="conv-flow" ref={laneRef}>
-              {msgs.map(m => (
+              {msgs.map(m => {
+                const permissionLevels = permissionLevelsForMessage(m)
+                return (
                 <div key={m.id} className={'s-msg ' + (m.role === 'user' ? 'me' : 'ai')}>
                   {m.role === 'assistant' && (
                     <div className="s-ai-icon"><Icon name="sparkles" cls="ic" /></div>
@@ -308,11 +376,19 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
                   <div className="s-body">
                     <div className="s-bubble">
                       <Markdown text={m.content} />
+                      {permissionLevels && (
+                        <button type="button" className="s-permission-request-button" onClick={() => openPermissionRequest(permissionLevels, m.id)}>
+                          <Icon name="lock" cls="ic" />
+                          <span>申请 {permissionLevels.join('、')} 数据权限</span>
+                          <Icon name="arrow-right" cls="ic arrow" />
+                        </button>
+                      )}
                     </div>
                     {m.streaming && <span className="s-caret" />}
                   </div>
                 </div>
-              ))}
+                )
+              })}
               <div ref={scrollAnchorRef} style={{ height: 1, flex: 'none' }} />
             </div>
 
@@ -341,6 +417,57 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
               onInternetShare={startInternetShare}
             />
           </div>
+        )}
+        {permissionRequest && createPortal(
+          <div className="permission-approval-mask" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && permissionStatus === 'ready') setPermissionRequest(null) }}>
+            <section className="permission-approval-dialog" role="dialog" aria-modal="true" aria-labelledby="permission-approval-title">
+              {permissionStatus === 'approved' ? (
+                <div className="permission-approval-result">
+                  <span><Icon name="check" cls="ic" /></span>
+                  <h2 id="permission-approval-title">权限申请已通过</h2>
+                  <p>{permissionAutoContinue ? '即将自动继续刚才的任务' : `${permissionRequest.levels.join('、')} 数据权限已生效`}</p>
+                </div>
+              ) : (
+                <>
+                  <header>
+                    <div><span className="permission-approval-lock"><Icon name="lock" cls="ic" /></span><div><h2 id="permission-approval-title">申请 {permissionRequest.levels.join('、')} 数据权限</h2></div></div>
+                    <button type="button" onClick={() => setPermissionRequest(null)} disabled={permissionStatus === 'submitting'} aria-label="关闭"><Icon name="x" cls="ic" /></button>
+                  </header>
+                  <div className="permission-approval-content">
+                    <div className="permission-scope-list">
+                      {permissionRequest.levels.map(level => {
+                        const detail = PERMISSION_LEVEL_DETAILS[level]
+                        return (
+                          <section className="permission-scope-card" key={level}>
+                            <header>
+                              <span className="permission-level-badge">{level}</span>
+                              <span className="permission-method">{detail.method}</span>
+                            </header>
+                            <div className="permission-scope-row">
+                              <span>数据范围</span>
+                              <div>{detail.domains.map(domain => <em key={domain}>{domain}</em>)}</div>
+                            </div>
+                            <div className="permission-approver"><span>审批人</span><strong>你的直属负责人（+1）</strong></div>
+                          </section>
+                        )
+                      })}
+                    </div>
+                    <label className="permission-auto-continue">
+                      <input type="checkbox" checked={permissionAutoContinue} onChange={event => setPermissionAutoContinue(event.target.checked)} disabled={permissionStatus === 'submitting'} />
+                      <span><strong>权限通过后自动继续任务</strong><small>系统将自动发送“{permissionRequest.levels.join('、')}权限通过了，请你继续”</small></span>
+                    </label>
+                  </div>
+                  <footer>
+                    <button type="button" className="cancel" onClick={() => setPermissionRequest(null)} disabled={permissionStatus === 'submitting'}>取消</button>
+                    <button type="button" className="submit" onClick={submitPermissionRequest} disabled={permissionStatus === 'submitting'}>
+                      {permissionStatus === 'submitting' ? <><span className="permission-submit-spinner" />审批中</> : '提交申请'}
+                    </button>
+                  </footer>
+                </>
+              )}
+            </section>
+          </div>,
+          document.body,
         )}
       </div>
     </section>

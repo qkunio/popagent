@@ -8,9 +8,10 @@ import { HomeView } from './views/HomeView'
 import { TaskView } from './views/TaskView'
 import { SkillLibraryView } from './views/SkillLibraryView'
 import { AppsView } from './views/AppsView'
+import { DataOverviewView } from './views/DataOverviewView'
 import type { Prefs } from './api'
 
-export type ViewName = 'home' | 'task' | 'skills' | 'apps'
+export type ViewName = 'home' | 'task' | 'skills' | 'apps' | 'data'
 
 export interface AppState {
   skills: Skill[]
@@ -104,6 +105,7 @@ function Shell() {
             { label: '定时任务', icon: 'clock-clockwise', view: null },
             { label: '技能库', icon: 'folders', view: 'skills' as ViewName },
             { label: '应用', icon: 'squares-four', view: 'apps' as ViewName },
+            { label: '数据', icon: 'database', view: 'data' as ViewName },
             { label: '服务', icon: 'cloud', view: null },
           ].map(item => (
             <button
@@ -171,6 +173,7 @@ function Shell() {
         {view === 'task' && <TaskView state={state} taskId={activeTaskId} />}
         {view === 'skills' && <SkillLibraryView toast={toast} />}
         {view === 'apps' && <AppsView state={state} />}
+        {view === 'data' && <DataOverviewView />}
       </main>
     </div>
   )

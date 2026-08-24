@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, useToast } from './Icon'
 import { SharePagePreview } from './SharePagePreview'
 import { SharePopover } from './SharePopover'
 import { SkillDetailDialog } from './SkillDetailDialog'
 import { SkillAppPreview, type SkillAppPreviewHandle } from './SkillAppPreview'
-import type { AgentPreview, AppPreview, KanbanPreview as KanbanPreviewData, SkillAppFile, SkillAppPreview as SkillAppPreviewData, WebpagePreview } from '../types'
+import { ScriptAppPreview } from './ScriptAppPreview'
+import type { AgentPreview, AppPreview, KanbanPreview as KanbanPreviewData, SkillAppFile, SkillAppPreview as SkillAppPreviewData, WebpagePreview, ScriptAppPreview as ScriptAppPreviewData } from '../types'
 import type { AppPreviewItem } from '../views/TaskView'
 import { ensureAgentDefaultSkills, publishSkillToLibrary, readSkillLibrary, toggleLibrarySkillInstalled, useSkillLibrary } from '../skillLibraryStore'
 import { downloadSkillZip } from '../skillZip'
+import { readPreviewSession, updatePreviewSession, type SkillAppSessionState } from '../previewSessionStore'
 
 const UPDATED_OFFICIAL_SKILL_IDS = new Set(['creator-info', 'trend'])
 
@@ -37,10 +39,32 @@ function previewTitle(p: AppPreview | null | undefined): string {
   if (p.type === 'sharepage') return p.cover.title || '分享页面'
   if (p.type === 'agent') return p.name || 'Agent 应用'
   if (p.type === 'skill') return p.name || 'SkillApp'
+  if (p.type === 'script') return p.name || 'Script App'
   return p.title || '未命名 WebApp'
 }
 
 type AgentTestMessage = { id: number; role: 'user' | 'agent'; text: string; streaming?: boolean }
+
+type AgentPreviewSessionState = {
+  view: 'profile' | 'chat'
+  editingPrompt: boolean
+  systemPrompt: string
+  promptDraft: string
+  apiKey: string
+  skillFilter: 'all' | 'installed' | 'uninstalled'
+  skillSearchOpen: boolean
+  skillQuery: string
+  updatedSkillIds: string[]
+  testedSystemPrompt: string
+  testedSkillSignature: string
+  draft: string
+  messages: AgentTestMessage[]
+}
+
+type WorkspacePreviewSessionState = {
+  tabs: WorkspaceTabId[]
+  activeTab: WorkspaceTabId | null
+}
 
 function AgentTestPreview({
   data,
@@ -61,28 +85,32 @@ function AgentTestPreview({
 }) {
   const librarySkills = useSkillLibrary()
   const initialSystemPrompt = `你是「${data.name}」。${data.description}\n\n请理解用户的目标，优先调用已配置的技能，并给出清晰、可执行的回答。`
-  const [view, setView] = useState<'profile' | 'chat'>(initialView)
-  const [editingPrompt, setEditingPrompt] = useState(false)
-  const [systemPrompt, setSystemPrompt] = useState(initialSystemPrompt)
-  const [promptDraft, setPromptDraft] = useState(initialSystemPrompt)
+  const restoredState = useMemo(() => readPreviewSession<AgentPreviewSessionState>('agent', agentKey), [agentKey])
+  const initialMessages = restoredState?.messages?.map(message => ({ ...message, streaming: false }))
+    ?? (initialAgentMessage ? [{ id: 1, role: 'agent' as const, text: initialAgentMessage }] : [])
+  const [view, setView] = useState<'profile' | 'chat'>(restoredState?.view || initialView)
+  const [editingPrompt, setEditingPrompt] = useState(restoredState?.editingPrompt || false)
+  const [systemPrompt, setSystemPrompt] = useState(restoredState?.systemPrompt || initialSystemPrompt)
+  const [promptDraft, setPromptDraft] = useState(restoredState?.promptDraft || initialSystemPrompt)
   const [promptSaved, setPromptSaved] = useState(false)
+  const [apiKey, setApiKey] = useState(restoredState?.apiKey || '')
   const [detailSkillId, setDetailSkillId] = useState<string | null>(null)
   const [skillScroll, setSkillScroll] = useState({ size: 28, top: 0 })
   const [skillScrollVisible, setSkillScrollVisible] = useState(false)
-  const [skillFilter, setSkillFilter] = useState<'all' | 'installed' | 'uninstalled'>('installed')
+  const [skillFilter, setSkillFilter] = useState<'all' | 'installed' | 'uninstalled'>(restoredState?.skillFilter || 'installed')
   const [skillFilterOpen, setSkillFilterOpen] = useState(false)
-  const [skillSearchOpen, setSkillSearchOpen] = useState(false)
-  const [skillQuery, setSkillQuery] = useState('')
+  const [skillSearchOpen, setSkillSearchOpen] = useState(restoredState?.skillSearchOpen || false)
+  const [skillQuery, setSkillQuery] = useState(restoredState?.skillQuery || '')
   const [updateConfirmSkillId, setUpdateConfirmSkillId] = useState<string | null>(null)
-  const [updatedSkillIds, setUpdatedSkillIds] = useState<string[]>([])
-  const [testedSystemPrompt, setTestedSystemPrompt] = useState(initialSystemPrompt)
-  const [testedSkillSignature, setTestedSkillSignature] = useState('')
-  const [draft, setDraft] = useState('')
-  const [messages, setMessages] = useState<AgentTestMessage[]>(() => initialAgentMessage ? [{ id: 1, role: 'agent', text: initialAgentMessage }] : [])
+  const [updatedSkillIds, setUpdatedSkillIds] = useState<string[]>(restoredState?.updatedSkillIds || [])
+  const [testedSystemPrompt, setTestedSystemPrompt] = useState(restoredState?.testedSystemPrompt || initialSystemPrompt)
+  const [testedSkillSignature, setTestedSkillSignature] = useState(restoredState?.testedSkillSignature || '')
+  const [draft, setDraft] = useState(restoredState?.draft || '')
+  const [messages, setMessages] = useState<AgentTestMessage[]>(initialMessages)
   const [streaming, setStreaming] = useState(false)
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
   const [backConfirmOpen, setBackConfirmOpen] = useState(false)
-  const nextId = useRef(initialAgentMessage ? 1 : 0)
+  const nextId = useRef(initialMessages.reduce((max, message) => Math.max(max, message.id), 0))
   const streamTimerRef = useRef<number | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const clearAnchorRef = useRef<HTMLDivElement>(null)
@@ -104,6 +132,24 @@ function AgentTestPreview({
     if (streamTimerRef.current !== null) window.clearTimeout(streamTimerRef.current)
     if (skillScrollTimerRef.current !== null) window.clearTimeout(skillScrollTimerRef.current)
   }, [])
+
+  useEffect(() => {
+    updatePreviewSession<AgentPreviewSessionState>('agent', agentKey, {
+      view,
+      editingPrompt,
+      systemPrompt,
+      promptDraft,
+      apiKey,
+      skillFilter,
+      skillSearchOpen,
+      skillQuery,
+      updatedSkillIds,
+      testedSystemPrompt,
+      testedSkillSignature,
+      draft,
+      messages: messages.map(message => ({ ...message, streaming: false })),
+    })
+  }, [agentKey, view, editingPrompt, systemPrompt, promptDraft, apiKey, skillFilter, skillSearchOpen, skillQuery, updatedSkillIds, testedSystemPrompt, testedSkillSignature, draft, messages])
 
   useEffect(() => {
     const body = bodyRef.current
@@ -147,9 +193,11 @@ function AgentTestPreview({
       ? ['hotspot', 'trend', 'creator-info']
       : ['creator-info', 'rules', 'trend']
     if (configureDefaults) ensureAgentDefaultSkills(agentKey, recommendedSkillIds)
-    setTestedSystemPrompt(initialSystemPrompt)
-    setTestedSkillSignature(readSkillLibrary().filter(skill => skill.installed).map(skill => skill.id).sort().join('|'))
-  }, [agentKey, configureDefaults, data.name, data.description])
+    if (!restoredState) {
+      setTestedSystemPrompt(initialSystemPrompt)
+      setTestedSkillSignature(readSkillLibrary().filter(skill => skill.installed).map(skill => skill.id).sort().join('|'))
+    }
+  }, [agentKey, configureDefaults, data.name, data.description, restoredState])
 
   useEffect(() => {
     const element = skillScrollRef.current
@@ -204,6 +252,7 @@ function AgentTestPreview({
   const clearMessages = () => {
     stopStreaming()
     setMessages([])
+    updatePreviewSession<AgentPreviewSessionState>('agent', agentKey, { messages: [] })
   }
 
   const requestClearMessages = () => {
@@ -265,6 +314,29 @@ function AgentTestPreview({
               </span>
               <h1>{data.name}</h1>
             </header>
+
+            {configureDefaults && (
+              <section className="agent-business-section agent-api-key-section">
+                <label htmlFor={`agent-api-key-${agentKey}`}>API Key</label>
+                <span className="agent-api-key-help">
+                  <button type="button" className="agent-api-key-help-trigger" aria-label="API Key 帮助">
+                    <Icon name="info" cls="ic" />
+                  </button>
+                  <span className="agent-api-key-tooltip" role="tooltip">
+                    <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">如何申请？</a>
+                  </span>
+                </span>
+                <input
+                  id={`agent-api-key-${agentKey}`}
+                  type="password"
+                  value={apiKey}
+                  onChange={event => setApiKey(event.target.value)}
+                  placeholder="请输入 API Key"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </section>
+            )}
 
             <section className="agent-business-section agent-prompt-card">
               <header>
@@ -357,9 +429,20 @@ function AgentTestPreview({
               </div>
             </section>
 
-            <button type="button" className="agent-chat-launch" onClick={() => setView('chat')}>
-              <Icon name="chat-circle-text" cls="ic" /><strong>和「{data.name}」对话</strong><Icon name="arrow-right" cls="ic arrow" />
-            </button>
+            <div className="agent-chat-launch-shell">
+              {configureDefaults && !apiKey.trim() && (
+                <span className="agent-chat-disabled-tooltip" id={`agent-api-key-required-${agentKey}`} role="tooltip">请填写 API Key</span>
+              )}
+              <button
+                type="button"
+                className="agent-chat-launch"
+                disabled={configureDefaults && !apiKey.trim()}
+                aria-describedby={configureDefaults && !apiKey.trim() ? `agent-api-key-required-${agentKey}` : undefined}
+                onClick={() => { if (!configureDefaults || apiKey.trim()) setView('chat') }}
+              >
+                <Icon name="chat-circle-text" cls="ic" /><strong>和「{data.name}」对话</strong><Icon name="arrow-right" cls="ic arrow" />
+              </button>
+            </div>
           </article>
         </div>
         <SkillDetailDialog skill={librarySkills.find(skill => skill.id === detailSkillId) || null} onClose={() => setDetailSkillId(null)} />
@@ -566,10 +649,12 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
 
   const currentApp = apps.find(a => a.id === currentAppId) || apps[apps.length - 1] || null
   const appKey = currentApp?.id || '__empty__'
-  const skillFiles = data?.type === 'skill' ? (skillFilesByApp[appKey] || data.files) : []
-  const skillFolders = data?.type === 'skill' ? (skillFoldersByApp[appKey] || data.folders || []) : []
-  const workspaceTabs = tabsByApp[appKey] || ['preview']
-  const requestedActiveTab = activeTabByApp[appKey]
+  const restoredSkillState = useMemo(() => readPreviewSession<SkillAppSessionState>('skill', appKey), [appKey])
+  const restoredWorkspaceState = useMemo(() => readPreviewSession<WorkspacePreviewSessionState>('workspace', appKey), [appKey])
+  const skillFiles = data?.type === 'skill' ? (skillFilesByApp[appKey] || restoredSkillState?.files || data.files) : []
+  const skillFolders = data?.type === 'skill' ? (skillFoldersByApp[appKey] || restoredSkillState?.folders || data.folders || []) : []
+  const workspaceTabs = tabsByApp[appKey] || restoredWorkspaceState?.tabs || ['preview']
+  const requestedActiveTab = activeTabByApp[appKey] !== undefined ? activeTabByApp[appKey] : restoredWorkspaceState?.activeTab
   const activeWorkspaceTab = requestedActiveTab !== undefined && requestedActiveTab !== null && workspaceTabs.includes(requestedActiveTab)
     ? requestedActiveTab
     : workspaceTabs[0] || null
@@ -579,9 +664,9 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     setSkillShareOpen(false)
     setAgentPublishOpen(false)
     setSkillAppDirty(false)
-    setSkillTestOpen(false)
+    setSkillTestOpen(Boolean(restoredSkillState?.testOpen))
     setPendingWorkspaceTab(null)
-  }, [appKey])
+  }, [appKey, restoredSkillState?.testOpen])
 
   const activateWorkspaceTab = (tabId: WorkspaceTabId) => {
     if (data?.type === 'skill' && skillAppDirty && activeWorkspaceTab === 'preview' && tabId !== 'preview') {
@@ -590,6 +675,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
       return
     }
     setActiveTabByApp(previous => ({ ...previous, [appKey]: tabId }))
+    updatePreviewSession<WorkspacePreviewSessionState>('workspace', appKey, { activeTab: tabId })
   }
 
   const saveAndSwitchWorkspaceTab = () => {
@@ -597,6 +683,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     skillPreviewRef.current?.save()
     setSkillAppDirty(false)
     setActiveTabByApp(previous => ({ ...previous, [appKey]: pendingWorkspaceTab }))
+    updatePreviewSession<WorkspacePreviewSessionState>('workspace', appKey, { activeTab: pendingWorkspaceTab })
     setPendingWorkspaceTab(null)
   }
 
@@ -615,6 +702,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
       setSkillAppDirty(false)
     }
     setSkillTestOpen(true)
+    updatePreviewSession<SkillAppSessionState>('skill', appKey, { testOpen: true })
   }
 
   const savePublishedSkill = () => {
@@ -637,21 +725,26 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
 
   const openWorkspaceTab = (tabId: WorkspaceTabId) => {
     setTabsByApp(previous => {
-      const current = previous[appKey] || ['preview']
-      return current.includes(tabId) ? previous : { ...previous, [appKey]: [...current, tabId] }
+      const current = previous[appKey] || restoredWorkspaceState?.tabs || ['preview']
+      if (current.includes(tabId)) return previous
+      const next = [...current, tabId]
+      updatePreviewSession<WorkspacePreviewSessionState>('workspace', appKey, { tabs: next })
+      return { ...previous, [appKey]: next }
     })
     activateWorkspaceTab(tabId)
     setAddMenuOpen(false)
   }
 
   const closeWorkspaceTab = (tabId: WorkspaceTabId) => {
-    const current = tabsByApp[appKey] || ['preview']
+    const current = tabsByApp[appKey] || restoredWorkspaceState?.tabs || ['preview']
     const closingIndex = current.indexOf(tabId)
     const next = current.filter(id => id !== tabId)
     setTabsByApp(previous => ({ ...previous, [appKey]: next }))
+    updatePreviewSession<WorkspacePreviewSessionState>('workspace', appKey, { tabs: next })
     setActiveTabByApp(previous => {
       if (previous[appKey] !== tabId && activeWorkspaceTab !== tabId) return previous
       const fallback = next[Math.min(closingIndex, next.length - 1)] || null
+      updatePreviewSession<WorkspacePreviewSessionState>('workspace', appKey, { activeTab: fallback })
       return { ...previous, [appKey]: fallback }
     })
   }
@@ -987,6 +1080,9 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
             {agentPublishPopover}
           </div>
         )}
+        {data?.type === 'script' && (
+          <button type="button" className="kb-publish-app-btn" onClick={() => toast('Script App 发布成功')}>发布</button>
+        )}
         {data?.type === 'skill' && (
           <div className="skill-publish-anchor" ref={skillPublishAnchorRef}>
             <button type="button" className="kb-publish-app-btn" aria-haspopup="dialog" aria-expanded={skillPublishOpen} onClick={() => skillPublishOpen ? setSkillPublishOpen(false) : openSkillPublish()}>发布</button>
@@ -1104,12 +1200,21 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     )
   }
 
+  if (data.type === 'script') {
+    return (
+      <div className="kb-wrap kb-wrap-scriptapp">
+        {workspaceHeader}
+        <ScriptAppPreview data={data as ScriptAppPreviewData} />
+      </div>
+    )
+  }
+
   if (data.type === 'agent') {
     return (
       <div className="kb-wrap kb-wrap-agent">
         {workspaceHeader}
         <div className="kb-agent-body">
-          <AgentTestPreview key={data.name} data={data} agentKey={currentApp?.id || data.name} />
+          <AgentTestPreview key={currentApp?.id || data.name} data={data} agentKey={currentApp?.id || data.name} />
         </div>
       </div>
     )
@@ -1135,20 +1240,26 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
               agentKey={`${appKey}-skill-test`}
               initialView="chat"
               initialAgentMessage="您好，我是您刚刚创建的skill，请向我发布任务"
-              onBack={() => setSkillTestOpen(false)}
+              onBack={() => {
+                setSkillTestOpen(false)
+                updatePreviewSession<SkillAppSessionState>('skill', appKey, { testOpen: false })
+              }}
               configureDefaults={false}
               replyLabel="Skill"
             />
           </div>
         ) : (
           <SkillAppPreview
+            key={`${appKey}-editor`}
             ref={skillPreviewRef}
             data={skillData}
             files={skillFiles}
             folders={skillFolders}
+            persistenceKey={appKey}
             onFilesChange={(files, folders) => {
               setSkillFilesByApp(current => ({ ...current, [appKey]: files }))
               setSkillFoldersByApp(current => ({ ...current, [appKey]: folders }))
+              updatePreviewSession<SkillAppSessionState>('skill', appKey, { files, folders })
               toast('Skill 文件已保存')
             }}
             onDirtyChange={setSkillAppDirty}

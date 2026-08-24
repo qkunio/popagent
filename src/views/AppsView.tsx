@@ -4,12 +4,14 @@ import { Icon } from '../components/Icon'
 import type { AppState } from '../App'
 import type { GeneratedApp } from '../types'
 
-type AppFilter = 'all' | 'webapp' | 'agentapp' | 'skillapp'
+type AppFilter = 'all' | 'webapp' | 'agentapp' | 'skillapp' | 'scriptapp'
 
 const appMeta = (type: GeneratedApp['type']) => type === 'agentapp'
   ? { label: 'AgentApp', icon: 'chat-circle-text' }
   : type === 'skillapp'
     ? { label: 'SkillApp', icon: 'lightning' }
+    : type === 'scriptapp'
+      ? { label: 'Script App', icon: 'code' }
     : { label: 'WebApp', icon: 'columns' }
 
 function relativeTime(timestamp: number) {
@@ -66,6 +68,7 @@ export function AppsView({ state }: { state: AppState }) {
                 ['webapp', 'WebApp'],
                 ['agentapp', 'AgentApp'],
                 ['skillapp', 'SkillApp'],
+                ['scriptapp', 'Script App'],
               ] as const).map(([value, label]) => (
                 <button key={value} type="button" className={filter === value ? 'on' : ''} onClick={() => setFilter(value)}>{label}</button>
               ))}
