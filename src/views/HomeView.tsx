@@ -1,14 +1,11 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { Icon } from '../components/Icon'
 import { Composer } from '../components/Composer'
-import { SharePopover } from '../components/SharePopover'
 import { api } from '../api'
 import type { AppState } from '../App'
 
 export function HomeView({ state }: { state: AppState }) {
   const [draft, setDraft] = useState(state.composerDraft || '做一个webapp')
-  const [shareOpen, setShareOpen] = useState(false)
-  const shareAnchorRef = useRef<HTMLDivElement>(null)
 
   const send = async (text: string, mode?: 'fast' | 'deep') => {
     setDraft('')
@@ -19,13 +16,6 @@ export function HomeView({ state }: { state: AppState }) {
     state.refreshSidebar()
     sessionStorage.setItem('pendingMessage:' + id, JSON.stringify({ text, skillId: matched?.id, mode }))
     state.openTask(id)
-  }
-
-  const startInternetShare = () => {
-    const prompt = '做一个对外链接'
-    setShareOpen(false)
-    setDraft(prompt)
-    window.setTimeout(() => send(prompt), 0)
   }
 
   const bento = [
@@ -39,36 +29,11 @@ export function HomeView({ state }: { state: AppState }) {
     setDraft(prompt)
   }
 
-  const homeShareBlock = (
-    <div className="sh-anchor" ref={shareAnchorRef}>
-      <button
-        type="button"
-        className="kb-share-btn"
-        title="分享"
-        aria-label="分享"
-        aria-haspopup="dialog"
-        aria-expanded={shareOpen}
-        onClick={() => setShareOpen(v => !v)}
-      >
-        <Icon name="share-fat" cls="ic kb-share-ic" />
-      </button>
-      <SharePopover
-        open={shareOpen}
-        onClose={() => setShareOpen(false)}
-        anchorRef={shareAnchorRef}
-        onInternetShare={startInternetShare}
-      />
-    </div>
-  )
-
   return (
     <section className="view on">
       <header className="chat-top">
         <div className="chat-top-left">
           <div className="chat-title">新建任务</div>
-        </div>
-        <div className="chat-top-right">
-          {homeShareBlock}
         </div>
       </header>
       <div className="homewrap">

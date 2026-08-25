@@ -4,7 +4,6 @@ import { Icon, useToast } from '../components/Icon'
 import { Composer } from '../components/Composer'
 import { Markdown } from '../components/Markdown'
 import { KanbanPreview } from '../components/KanbanPreview'
-import { SharePopover } from '../components/SharePopover'
 import { api, streamChat } from '../api'
 import type { AppState } from '../App'
 import type { AppPreview } from '../types'
@@ -38,12 +37,11 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
   const [progress, setProgress] = useState(0)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [currentAppId, setCurrentAppId] = useState<string | null>(null)
-  const [shareOpen, setShareOpen] = useState(false)
+  const [shareMode, setShareMode] = useState(false)
+  const [selectedRoundIds, setSelectedRoundIds] = useState<string[]>([])
   const [permissionRequest, setPermissionRequest] = useState<{ levels: PermissionLevel[]; messageId: string } | null>(null)
-  const [permissionAutoContinue, setPermissionAutoContinue] = useState(true)
   const [permissionStatus, setPermissionStatus] = useState<'ready' | 'submitting' | 'approved'>('ready')
   const laneRef = useRef<HTMLDivElement>(null)
-  const shareAnchorRef = useRef<HTMLDivElement>(null)
   const toast = useToast()
 
   const streamVersion = useRef(0)
@@ -56,6 +54,16 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
   useEffect(() => () => {
     if (permissionTimerRef.current !== null) window.clearTimeout(permissionTimerRef.current)
   }, [])
+
+  useEffect(() => {
+    const onTaskUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ id: string; title?: string; pinned?: boolean }>).detail
+      if (!detail || detail.id !== taskId) return
+      setTask((current: any) => current ? { ...current, ...detail } : current)
+    }
+    window.addEventListener('task:updated', onTaskUpdated)
+    return () => window.removeEventListener('task:updated', onTaskUpdated)
+  }, [taskId])
 
   const scrollToBottom = (smooth = false) => {
     const el = scrollAnchorRef.current
@@ -97,9 +105,41 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
 
   const currentPreview: AppPreview | null = currentApp?.preview || null
 
+  const shareRounds = useMemo(() => {
+    const rounds: Array<{ id: string; messageIds: string[] }> = []
+    let current: { id: string; messageIds: string[] } | null = null
+    msgs.forEach((message, index) => {
+      if (message.role === 'user' || !current) {
+        current = { id: `round_${message.role === 'user' ? message.id : `leading_${index}`}`, messageIds: [] }
+        rounds.push(current)
+      }
+      current.messageIds.push(message.id)
+    })
+    return rounds
+  }, [msgs])
+
+  const roundIdByMessage = useMemo(() => {
+    const map = new Map<string, string>()
+    shareRounds.forEach(round => round.messageIds.forEach(messageId => map.set(messageId, round.id)))
+    return map
+  }, [shareRounds])
+
   useEffect(() => {
     setCurrentAppId(null)
+    setShareMode(false)
+    setSelectedRoundIds([])
   }, [taskId])
+
+  useEffect(() => {
+    if (!shareMode) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setShareMode(false)
+      setSelectedRoundIds([])
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [shareMode])
 
   useEffect(() => {
     apps.forEach(app => {
@@ -146,7 +186,7 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
       try { pending = JSON.parse(pendingRaw) } catch { pending = null }
     }
     if (pending?.text) {
-      setMsgs([{ id: 'pending_user', role: 'user', content: pending.text, trace: [], sources: [] }])
+      setMsgs([{ id: 'pending_user', role: 'user', content: pending.text, trace: [], sources: [], created_at: Date.now() }])
     }
 
     api.task(taskId).then(t => {
@@ -155,7 +195,7 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
 
       let nextMsgs: any[] = []
       if (t.messages.length > 0) nextMsgs = t.messages.map(m => ({ ...m }))
-      if (pending?.text) nextMsgs = [{ id: 'pending_user', role: 'user', content: pending.text, trace: [], sources: [] }]
+      if (pending?.text) nextMsgs = [{ id: 'pending_user', role: 'user', content: pending.text, trace: [], sources: [], created_at: Date.now() }]
       setMsgs(nextMsgs)
       setTimeout(() => scrollToBottom(false), 20)
 
@@ -199,7 +239,7 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
     setProgress(10)
 
     const userMsgId = 'u_' + Date.now() + '_' + version
-    setMsgs(prev => [...prev, { id: userMsgId, role: 'user', content: text, trace: [], sources: [] }])
+    setMsgs(prev => [...prev, { id: userMsgId, role: 'user', content: text, trace: [], sources: [], created_at: Date.now() }])
     setTimeout(() => scrollToBottom(false), 10)
 
     let asstMsgTmpId: string | null = null
@@ -228,7 +268,7 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
             }
             const id = 's_' + Date.now() + '_' + version
             asstMsgTmpId = id
-            return [...prev, { id, role: 'assistant', content: delta, trace: [], sources: [], streaming: true, app_preview: null }]
+            return [...prev, { id, role: 'assistant', content: delta, trace: [], sources: [], streaming: true, app_preview: null, created_at: Date.now() }]
           })
         },
         onDone: ({ content, trace, sources, app_preview }) => {
@@ -291,7 +331,6 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
 
   const openPermissionRequest = (levels: PermissionLevel[], messageId: string) => {
     setPermissionRequest({ levels, messageId })
-    setPermissionAutoContinue(true)
     setPermissionStatus('ready')
   }
 
@@ -305,8 +344,7 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
         setPermissionRequest(null)
         setPermissionStatus('ready')
         permissionTimerRef.current = null
-        if (permissionAutoContinue) send(`${levelLabel}权限通过了，请你继续`)
-        else toast(`${levelLabel} 权限已通过`)
+        toast(`${levelLabel} 权限已通过`)
       }, 900)
     }, 1400)
   }
@@ -321,36 +359,61 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
 
   const startInternetShare = () => {
     const prompt = '做一个对外链接'
-    setShareOpen(false)
     setDraft(prompt)
     window.setTimeout(() => send(prompt), 0)
+  }
+
+  const formatMessageTime = (value?: number) => {
+    const date = new Date(value || Date.now())
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    return `${date.getMonth() + 1}月${date.getDate()}日 ${hours}:${minutes}`
+  }
+
+  const copyMessage = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content)
+      toast('消息已复制')
+    } catch { toast('复制失败') }
+  }
+
+  const enterShareMode = (messageId: string) => {
+    const roundId = roundIdByMessage.get(messageId)
+    if (!roundId) return
+    setSelectedRoundIds([roundId])
+    setShareMode(true)
+  }
+
+  const toggleRound = (messageId: string) => {
+    const roundId = roundIdByMessage.get(messageId)
+    if (!roundId) return
+    setSelectedRoundIds(current => current.includes(roundId) ? current.filter(id => id !== roundId) : [...current, roundId])
+  }
+
+  const allRoundsSelected = shareRounds.length > 0 && selectedRoundIds.length === shareRounds.length
+
+  const toggleAllRounds = () => {
+    setSelectedRoundIds(allRoundsSelected ? [] : shareRounds.map(round => round.id))
+  }
+
+  const copyConversationShareLink = async () => {
+    if (!taskId || selectedRoundIds.length === 0) return
+    const roundIndexes = shareRounds
+      .map((round, index) => selectedRoundIds.includes(round.id) ? index + 1 : null)
+      .filter((index): index is number => index !== null)
+      .join(',')
+    const link = `https://popagent.example.com/share/${taskId}?rounds=${roundIndexes}`
+    try {
+      await navigator.clipboard.writeText(link)
+      toast('分享链接已复制')
+      setShareMode(false)
+      setSelectedRoundIds([])
+    } catch { toast('复制失败') }
   }
 
   if (!task) return <section className="view on"><div className="pagebody"><div className="frow-empty">加载中…</div></div></section>
 
   const showPreview = previewOpen
-
-  const chatShareBlock = (
-    <div className="sh-anchor" ref={shareAnchorRef}>
-      <button
-        type="button"
-        className="kb-share-btn"
-        title="分享任务"
-        aria-label="分享任务"
-        aria-haspopup="dialog"
-        aria-expanded={shareOpen}
-        onClick={() => setShareOpen(v => !v)}
-      >
-        <Icon name="share-fat" cls="ic kb-share-ic" />
-      </button>
-      <SharePopover
-        open={shareOpen}
-        onClose={() => setShareOpen(false)}
-        anchorRef={shareAnchorRef}
-        onInternetShare={startInternetShare}
-      />
-    </div>
-  )
 
   return (
     <section className="view on">
@@ -360,16 +423,44 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
             <div className="chat-top-left">
               <div className="chat-title" title={task?.title}>{task?.title || '对话'}</div>
             </div>
-            <div className="chat-top-right">
-              {chatShareBlock}
-            </div>
+            {!showPreview && currentPreview && (
+              <div className="chat-top-right">
+                <button
+                  type="button"
+                  className="split-toggle-btn"
+                  aria-label="展开产物分屏"
+                  title="展开分屏"
+                  onClick={() => {
+                    if (taskId) sessionStorage.removeItem('previewClosed:' + taskId)
+                    setPreviewOpen(true)
+                  }}
+                >
+                  <Icon name="columns" cls="ic" />
+                </button>
+              </div>
+            )}
           </header>
-          <div className="conv-simple">
+          <div className={'conv-simple' + (shareMode ? ' share-mode' : '')}>
             <div className="conv-flow" ref={laneRef}>
               {msgs.map(m => {
                 const permissionLevels = permissionLevelsForMessage(m)
+                const messageRoundId = roundIdByMessage.get(m.id)
+                const roundSelected = Boolean(messageRoundId && selectedRoundIds.includes(messageRoundId))
                 return (
-                <div key={m.id} className={'s-msg ' + (m.role === 'user' ? 'me' : 'ai')}>
+                <div
+                  key={m.id}
+                  className={'s-msg ' + (m.role === 'user' ? 'me' : 'ai') + (shareMode ? ' share-selectable' : '') + (roundSelected ? ' selected' : '')}
+                  aria-selected={shareMode ? roundSelected : undefined}
+                  onClick={event => {
+                    if (!shareMode || (event.target as HTMLElement).closest('button')) return
+                    toggleRound(m.id)
+                  }}
+                >
+                  {shareMode && (
+                    <button type="button" className="s-share-check" aria-label={roundSelected ? '取消选择本轮' : '选择本轮'} onClick={event => { event.stopPropagation(); toggleRound(m.id) }}>
+                      {roundSelected && <Icon name="check" cls="ic" />}
+                    </button>
+                  )}
                   {m.role === 'assistant' && (
                     <div className="s-ai-icon"><Icon name="sparkles" cls="ic" /></div>
                   )}
@@ -384,6 +475,15 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
                         </button>
                       )}
                     </div>
+                    <div className="s-message-meta" aria-label="消息操作">
+                      <time dateTime={m.created_at ? new Date(m.created_at).toISOString() : undefined}>{formatMessageTime(m.created_at)}</time>
+                      <button type="button" title="分享消息" aria-label="分享消息" onClick={event => { event.stopPropagation(); enterShareMode(m.id) }}>
+                        <Icon name="share-fat" cls="ic" />
+                      </button>
+                      <button type="button" title="复制消息" aria-label="复制消息" onClick={event => { event.stopPropagation(); copyMessage(m.content || '') }}>
+                        <Icon name="copy" cls="ic" />
+                      </button>
+                    </div>
                     {m.streaming && <span className="s-caret" />}
                   </div>
                 </div>
@@ -392,13 +492,34 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
               <div ref={scrollAnchorRef} style={{ height: 1, flex: 'none' }} />
             </div>
 
-            <div className="s-composer-wrap">
-              <Composer
-                placeholder="继续追问，比如「那封面要不要换」"
-                value={draft} onChange={setDraft} onSend={send}
-                disabled={busy}
-                progress={progress}
-              />
+            <div className={'s-composer-wrap' + (shareMode ? ' share-controls' : '')}>
+              {shareMode ? (
+                <div className="s-share-mode-bar" role="toolbar" aria-label="分享会话记录">
+                  <button
+                    type="button"
+                    className="exit-share-mode"
+                    aria-label="退出选择模式"
+                    title="退出选择模式"
+                    onClick={() => { setShareMode(false); setSelectedRoundIds([]) }}
+                  >
+                    <Icon name="x" cls="ic" />
+                  </button>
+                  <button type="button" className="select-all" onClick={toggleAllRounds}>
+                    <Icon name="check-circle" cls="ic" />
+                    {allRoundsSelected ? '取消全选' : '全部选中'}
+                  </button>
+                  <button type="button" className="copy-link" disabled={selectedRoundIds.length === 0} onClick={copyConversationShareLink}>
+                    <Icon name="share-fat" cls="ic" />复制链接
+                  </button>
+                </div>
+              ) : (
+                <Composer
+                  placeholder="继续追问，比如「那封面要不要换」"
+                  value={draft} onChange={setDraft} onSend={send}
+                  disabled={busy}
+                  progress={progress}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -425,7 +546,7 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
                 <div className="permission-approval-result">
                   <span><Icon name="check" cls="ic" /></span>
                   <h2 id="permission-approval-title">权限申请已通过</h2>
-                  <p>{permissionAutoContinue ? '即将自动继续刚才的任务' : `${permissionRequest.levels.join('、')} 数据权限已生效`}</p>
+                  <p>{permissionRequest.levels.join('、')} 数据权限已生效</p>
                 </div>
               ) : (
                 <>
@@ -452,10 +573,6 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
                         )
                       })}
                     </div>
-                    <label className="permission-auto-continue">
-                      <input type="checkbox" checked={permissionAutoContinue} onChange={event => setPermissionAutoContinue(event.target.checked)} disabled={permissionStatus === 'submitting'} />
-                      <span><strong>权限通过后自动继续任务</strong><small>系统将自动发送“{permissionRequest.levels.join('、')}权限通过了，请你继续”</small></span>
-                    </label>
                   </div>
                   <footer>
                     <button type="button" className="cancel" onClick={() => setPermissionRequest(null)} disabled={permissionStatus === 'submitting'}>取消</button>

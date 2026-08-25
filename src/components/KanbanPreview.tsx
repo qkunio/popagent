@@ -569,6 +569,8 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   const [webApprovalReason, setWebApprovalReason] = useState('')
   const [webApprovalStatus, setWebApprovalStatus] = useState<WebApprovalStatus>('idle')
   const [webLinkCopied, setWebLinkCopied] = useState(false)
+  type WebDeployStatus = 'outdated' | 'building' | 'packing' | 'deploying' | 'deployed'
+  const [webDeployByApp, setWebDeployByApp] = useState<Record<string, WebDeployStatus>>({})
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [tabsByApp, setTabsByApp] = useState<Record<string, WorkspaceTabId[]>>({})
   const [activeTabByApp, setActiveTabByApp] = useState<Record<string, WorkspaceTabId | null>>({})
@@ -592,6 +594,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   const agentPublishAnchorRef = useRef<HTMLDivElement>(null)
   const copyTimerRef = useRef<number | null>(null)
   const approvalTimerRef = useRef<number | null>(null)
+  const webDeployTimersRef = useRef<number[]>([])
   const skillPreviewRef = useRef<SkillAppPreviewHandle>(null)
 
   useEffect(() => {
@@ -649,6 +652,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
 
   const currentApp = apps.find(a => a.id === currentAppId) || apps[apps.length - 1] || null
   const appKey = currentApp?.id || '__empty__'
+  const webDeploymentStatus = webDeployByApp[appKey] || 'building'
   const restoredSkillState = useMemo(() => readPreviewSession<SkillAppSessionState>('skill', appKey), [appKey])
   const restoredWorkspaceState = useMemo(() => readPreviewSession<WorkspacePreviewSessionState>('workspace', appKey), [appKey])
   const skillFiles = data?.type === 'skill' ? (skillFilesByApp[appKey] || restoredSkillState?.files || data.files) : []
@@ -667,6 +671,32 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     setSkillTestOpen(Boolean(restoredSkillState?.testOpen))
     setPendingWorkspaceTab(null)
   }, [appKey, restoredSkillState?.testOpen])
+
+  const startWebDeployment = (targetAppKey: string) => {
+    webDeployTimersRef.current.forEach(timer => window.clearTimeout(timer))
+    webDeployTimersRef.current = []
+    setWebDeployByApp(current => ({ ...current, [targetAppKey]: 'building' }))
+    webDeployTimersRef.current = [
+      window.setTimeout(() => setWebDeployByApp(current => ({ ...current, [targetAppKey]: 'packing' })), 1800),
+      window.setTimeout(() => setWebDeployByApp(current => ({ ...current, [targetAppKey]: 'deploying' })), 3600),
+      window.setTimeout(() => setWebDeployByApp(current => ({ ...current, [targetAppKey]: 'deployed' })), 5600),
+    ]
+  }
+
+  useEffect(() => {
+    webDeployTimersRef.current.forEach(timer => window.clearTimeout(timer))
+    webDeployTimersRef.current = []
+    if (data?.type !== 'webapp' || webDeployByApp[appKey] === 'deployed') return
+    if ((data.revision || 0) > 0) {
+      setWebDeployByApp(current => ({ ...current, [appKey]: 'outdated' }))
+      return
+    }
+    startWebDeployment(appKey)
+    return () => {
+      webDeployTimersRef.current.forEach(timer => window.clearTimeout(timer))
+      webDeployTimersRef.current = []
+    }
+  }, [appKey, data?.type])
 
   const activateWorkspaceTab = (tabId: WorkspaceTabId) => {
     if (data?.type === 'skill' && skillAppDirty && activeWorkspaceTab === 'preview' && tabId !== 'preview') {
@@ -907,6 +937,8 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
         hideInternetShare={data?.type === 'agent'}
         copyLabel={data?.type === 'agent' ? '复制链接' : undefined}
         onInternetShare={onInternetShare ? () => onInternetShare() : undefined}
+        deploymentStatus={data?.type === 'webapp' ? webDeploymentStatus : undefined}
+        onSyncDeployment={data?.type === 'webapp' ? () => startWebDeployment(appKey) : undefined}
       />
     </div>
   )
@@ -1071,9 +1103,6 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
       <div className="kb-top-right">
         {data?.type !== 'skill' && shareBlock}
         {skillShareBlock}
-        {data?.type === 'webapp' && (
-          <button type="button" className="kb-publish-app-btn" onClick={() => toast('WebApp 发布成功')}>发布</button>
-        )}
         {data?.type === 'agent' && (
           <div className="skill-publish-anchor" ref={agentPublishAnchorRef}>
             <button type="button" className="kb-publish-app-btn" aria-haspopup="dialog" aria-expanded={agentPublishOpen} onClick={() => agentPublishOpen ? setAgentPublishOpen(false) : openAgentPublish()}>发布</button>
@@ -1089,6 +1118,9 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
             {skillPublishPopover}
           </div>
         )}
+        <button type="button" className="split-toggle-btn" onClick={onClose} aria-label="收起产物分屏" title="收起分屏">
+          <Icon name="columns" cls="ic" />
+        </button>
       </div>
     </header>
   )
@@ -1276,7 +1308,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     k.status_tag.color === 'grn' ? 'grn' : 'ok'
 
   return (
-    <div className="kb-wrap">
+    <div className={'kb-wrap' + (k.theme === 'violet' ? ' kb-theme-violet' : '')}>
       {workspaceHeader}
 
       <div className="kb-body">
