@@ -226,7 +226,7 @@ function mockAIResponse(message: string, skillId?: string): { content: string; t
   const triggersAgentApp = /做一个\s*agent\s*app/i.test(message)
   const triggersScriptApp = /做一个\s*script\s*app/i.test(message)
   const triggersSkillApp = /做一个\s*skill(?:\s*app)?/i.test(message)
-  const triggersSharePage = message.includes('做一个对外链接')
+  const triggersSharePage = /做一个对外(?:链接|连接)/.test(message)
   const triggersWebApp = /做一个\s*web\s*app/i.test(message)
   const mentionedPermissionLevels = Array.from(new Set(
     Array.from(message.matchAll(/[Ll]([23])/g), match => `L${match[1]}`),
@@ -544,21 +544,9 @@ function mockAIResponse(message: string, skillId?: string): { content: string; t
       footer: { note: W.footer.note, share_url, qr_caption: W.footer.qr_caption },
     }
 
-    content = `${W.markdownTitle}
+    content = `对外网页的内容与结构已经准备完成，右侧正在制作网页。
 
-${W.markdownIntro}
-
-**分享信息：**
-- 链接：<${share_url}>
-- 主题色：${theme}（sage 绿 / lilac 紫 / coral 橙 / sky 蓝，每次不同）
-- 外部访问：${external ? '无需登录，作者本人扫码即可打开' : '仅内部飞书可见'}
-- 阅读量（模拟）：${reads}
-
-${W.markdownSections.join('\\n\\n')}
-
-${W.markdownCallout}
-
-分享页面已生成，右侧可以直接预览并扫码分享，你想继续调整哪一部分？`
+访问范围已设置为互联网可见。请先申请分享权限，审批通过后即可生成并复制线上链接。`
 
     trace = [
       { tool: 'structure_page', connector: '分享引擎', label: '分享引擎 · structure_page()', status: 'run', ms: 0 },
@@ -839,6 +827,14 @@ export async function streamChat(
   await delay(300)
 
   let { content, trace, sources, app_preview } = mockAIResponse(message, skillId)
+
+  if (/做一个对外(?:链接|连接)/.test(message)) {
+    app_preview = null
+    content = `已开始为当前 WebApp 准备对外访问。\n\n访问范围已设置为互联网可见。请先申请分享权限，审批通过后即可生成并复制线上链接。`
+    trace = [
+      { tool: 'prepare_external_access', connector: '分享引擎', label: '分享引擎 · prepare_external_access()', status: 'ok', ms: 180 },
+    ]
+  }
 
   if (!app_preview && /修改/.test(message)) {
     const previousWebApp = [...s.messages]
