@@ -3,7 +3,7 @@ import type { Skill, Connector, AppItem, Schedule, Folder, SidebarTask, TaskDeta
 const LS_KEY = 'popagent:data'
 
 interface Store {
-  tasks: { id: string; title: string; folder_id: string; skill_id: string | null; status: string; dot: string; created_at: number; updated_at: number }[]
+  tasks: { id: string; title: string; folder_id: string; skill_id: string | null; status: string; dot: string; pinned?: boolean; created_at: number; updated_at: number }[]
   messages: { id: string; task_id: string; role: 'user' | 'assistant'; content: string; trace: TraceStep[]; sources: string[]; feedback: string | null; created_at: number; app_preview?: AppPreview | null }[]
   folders: Folder[]
   skills: Skill[]
@@ -644,8 +644,8 @@ export const api = {
 
   async sidebar(): Promise<SidebarTask[]> {
     const s = loadStore()
-    const tasks = [...s.tasks].sort((a, b) => b.updated_at - a.updated_at).map(t => ({
-      id: t.id, title: t.title, dot: t.dot, skill_id: t.skill_id,
+    const tasks = [...s.tasks].sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.updated_at - a.updated_at).map(t => ({
+      id: t.id, title: t.title, dot: t.dot, skill_id: t.skill_id, pinned: Boolean(t.pinned),
     }))
     return tasks
   },
@@ -733,7 +733,7 @@ export const api = {
     const skill = task.skill_id ? s.skills.find(sk => sk.id === task.skill_id) : null
     return {
       id: task.id, title: task.title, folder_id: task.folder_id,
-      skill_id: task.skill_id, status: task.status, dot: task.dot,
+      skill_id: task.skill_id, status: task.status, dot: task.dot, pinned: Boolean(task.pinned),
       messages: msgs,
       skill: skill ? { id: skill.id, name: skill.name, color: skill.color, icon: skill.icon } : null,
     }
@@ -751,6 +751,25 @@ export const api = {
     const s = loadStore()
     s.tasks = s.tasks.filter(t => t.id !== id)
     s.messages = s.messages.filter(m => m.task_id !== id)
+    saveStore(s)
+    return { ok: true }
+  },
+
+  async renameTask(id: string, title: string): Promise<{ ok: boolean }> {
+    const s = loadStore()
+    const task = s.tasks.find(task => task.id === id)
+    if (!task) throw new Error('task not found')
+    task.title = title.trim()
+    task.updated_at = Date.now()
+    saveStore(s)
+    return { ok: true }
+  },
+
+  async setTaskPinned(id: string, pinned: boolean): Promise<{ ok: boolean }> {
+    const s = loadStore()
+    const task = s.tasks.find(task => task.id === id)
+    if (!task) throw new Error('task not found')
+    task.pinned = pinned
     saveStore(s)
     return { ok: true }
   },
@@ -819,7 +838,27 @@ export async function streamChat(
 
   await delay(300)
 
-  const { content, trace, sources, app_preview } = mockAIResponse(message, skillId)
+  let { content, trace, sources, app_preview } = mockAIResponse(message, skillId)
+
+  if (!app_preview && /修改/.test(message)) {
+    const previousWebApp = [...s.messages]
+      .reverse()
+      .find(item => item.task_id === taskId && item.app_preview?.type === 'webapp')
+      ?.app_preview as KanbanPreview | undefined
+    if (previousWebApp) {
+      const nextTheme = previousWebApp.theme === 'violet' ? 'sand' : 'violet'
+      app_preview = {
+        ...previousWebApp,
+        theme: nextTheme,
+        revision: (previousWebApp.revision || 0) + 1,
+      }
+      content = `WebApp 已完成修改，我调整了整体主题色，右侧预览已更新。\n\n分享版本尚未同步，可在“分享产物”中确认并同步最新修改。`
+      trace = [
+        { tool: 'update_theme', connector: '应用引擎', label: `应用引擎 · update_theme(${nextTheme})`, status: 'ok', ms: 160 },
+        { tool: 'render_preview', connector: '应用引擎', label: '应用引擎 · render_preview()', status: 'ok', ms: 120 },
+      ]
+    }
+  }
 
   if (trace.length > 0) {
     for (const step of trace) {

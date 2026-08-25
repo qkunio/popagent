@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Icon, ToastProvider, useToast } from './components/Icon'
 import { DialogProvider, useDialog } from './components/Dialog'
 import { useColResize } from './components/useColResize'
@@ -9,6 +10,7 @@ import { TaskView } from './views/TaskView'
 import { SkillLibraryView } from './views/SkillLibraryView'
 import { AppsView } from './views/AppsView'
 import { DataOverviewView } from './views/DataOverviewView'
+import { SharePopover } from './components/SharePopover'
 import type { Prefs } from './api'
 
 export type ViewName = 'home' | 'task' | 'skills' | 'apps' | 'data'
@@ -44,6 +46,10 @@ function Shell() {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
   const [composerDraft, setComposerDraft] = useState('')
   const [acctOpen, setAcctOpen] = useState(false)
+  const [sidebarMenu, setSidebarMenu] = useState<{ task: SidebarTask; top: number; left: number } | null>(null)
+  const [sidebarShareTask, setSidebarShareTask] = useState<SidebarTask | null>(null)
+  const [sidebarActionAnchor, setSidebarActionAnchor] = useState<HTMLButtonElement | null>(null)
+  const sidebarActionAnchorRef = { current: sidebarActionAnchor }
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('popagent-theme') as 'light' | 'dark') || 'light')
   const [me, setMe] = useState<{ name: string; role: string; avatar?: string; authenticated?: boolean } | null>(null)
   const [prefs, setPrefs] = useState<Prefs | null>(null)
@@ -82,6 +88,29 @@ function Shell() {
       toast('会话已删除')
     } catch { toast('删除失败') }
   }, [activeTaskId, refreshSidebar, toast, dialog])
+
+  const toggleSidebarPin = async (task: SidebarTask) => {
+    setSidebarMenu(null)
+    const pinned = !Boolean(task.pinned)
+    try {
+      await api.setTaskPinned(task.id, pinned)
+      refreshSidebar()
+      window.dispatchEvent(new CustomEvent('task:updated', { detail: { id: task.id, pinned } }))
+      toast(pinned ? '已置顶会话' : '已取消置顶')
+    } catch { toast('操作失败') }
+  }
+
+  const renameSidebarTask = async (task: SidebarTask) => {
+    setSidebarMenu(null)
+    const title = await dialog.prompt({ title: '重命名会话', message: '输入新的会话名称', defaultValue: task.title, placeholder: '会话名称', okText: '保存' })
+    if (!title || title === task.title) return
+    try {
+      await api.renameTask(task.id, title)
+      refreshSidebar()
+      window.dispatchEvent(new CustomEvent('task:updated', { detail: { id: task.id, title } }))
+      toast('会话名称已更新')
+    } catch { toast('重命名失败') }
+  }
 
   const state: AppState = {
     skills, connectors, sidebar, refreshSidebar, go, openTask,
@@ -133,14 +162,73 @@ function Shell() {
           {sidebar.map(t => (
             <div key={t.id} className={'frow frow-row' + (activeTaskId === t.id && view === 'task' ? ' on' : '')} onClick={() => openTask(t.id)}>
               <span className={'fdot' + (t.dot ? ' ' + t.dot : '')} /><span className="ftx">{t.title}</span>
-              <button className="frow-del" aria-label="删除会话" title="删除会话" onClick={e => { e.stopPropagation(); deleteTask(t.id, t.title) }}>
-                <Icon name="x" cls="ic-s ic" />
+              <button
+                className="frow-del"
+                aria-label={`更多会话操作：${t.title}`}
+                title="更多"
+                aria-haspopup="menu"
+                aria-expanded={sidebarMenu?.task.id === t.id}
+                onClick={e => {
+                  e.stopPropagation()
+                  setSidebarActionAnchor(e.currentTarget)
+                  setSidebarShareTask(null)
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  const menuHeight = 184
+                  const belowTop = rect.bottom + 5
+                  const top = belowTop + menuHeight <= window.innerHeight - 8
+                    ? belowTop
+                    : Math.max(8, rect.top - menuHeight - 5)
+                  const left = Math.min(Math.max(8, rect.right - 168), window.innerWidth - 176)
+                  setSidebarMenu(current => current?.task.id === t.id ? null : { task: t, top, left })
+                }}
+              >
+                <Icon name="dots-three" cls="ic-s ic" />
               </button>
+              {t.pinned && (
+                <button
+                  type="button"
+                  className="frow-pin"
+                  aria-label={`取消置顶：${t.title}`}
+                  title="取消置顶"
+                  onClick={e => { e.stopPropagation(); toggleSidebarPin(t) }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3.5h8l-1 5 3.5 3.5v1.5h-6V21l-1-1-1-6.5h-6V12L8 8.5l-1-5Z" /></svg>
+                </button>
+              )}
             </div>
           ))}
           {sidebar.length === 0 && <div className="frow-empty">还没有对话</div>}
           </div>
         </div>
+
+        {sidebarMenu && createPortal((
+          <>
+            <button type="button" className="chat-more-dismiss" aria-label="关闭菜单" onClick={() => setSidebarMenu(null)} />
+            <div className="chat-more-menu sidebar-chat-more-menu" role="menu" style={{ top: sidebarMenu.top, left: sidebarMenu.left }}>
+              <button type="button" role="menuitem" onClick={() => toggleSidebarPin(sidebarMenu.task)}>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3.5h8l-1 5 3.5 3.5v1.5h-6V21l-1-1-1-6.5h-6V12L8 8.5l-1-5Z" /></svg>
+                <span>{sidebarMenu.task.pinned ? '取消置顶' : '置顶'}</span>
+              </button>
+              <button type="button" role="menuitem" onClick={() => { setSidebarShareTask(sidebarMenu.task); setSidebarMenu(null) }}>
+                <Icon name="share-fat" cls="ic" /><span>分享</span>
+              </button>
+              <button type="button" role="menuitem" onClick={() => renameSidebarTask(sidebarMenu.task)}>
+                <Icon name="pencil-simple" cls="ic" /><span>重命名</span>
+              </button>
+              <button type="button" role="menuitem" className="danger" onClick={() => { const task = sidebarMenu.task; setSidebarMenu(null); deleteTask(task.id, task.title) }}>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7.5h15M9 4.5h6l1 3H8l1-3Zm-2 3 .8 12h8.4l.8-12M10 11v5M14 11v5" /></svg>
+                <span>删除</span>
+              </button>
+            </div>
+          </>
+        ), document.body)}
+        <SharePopover
+          open={Boolean(sidebarShareTask)}
+          onClose={() => setSidebarShareTask(null)}
+          anchorRef={sidebarActionAnchorRef}
+          title="分享对话"
+          shareUrl={sidebarShareTask ? `https://popagent.example.com/share/${sidebarShareTask.id}` : undefined}
+        />
 
         <div className="railfoot">
           <div className="av" aria-hidden="true">P</div>

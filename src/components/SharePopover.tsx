@@ -28,6 +28,8 @@ interface SharePopoverProps {
   copyLabel?: string
   onCopy?: (url: string) => void
   onInternetShare?: (url: string) => void
+  deploymentStatus?: 'outdated' | 'building' | 'packing' | 'deploying' | 'deployed'
+  onSyncDeployment?: () => void
 }
 
 const MAKE_MEMBERS = (): ShareMember[] => [
@@ -51,7 +53,7 @@ interface PopPos {
   top: number
 }
 
-function calcPos(anchor: HTMLElement | null, width = 560, height = 240): PopPos {
+function calcPos(anchor: HTMLElement | null, width = 480, height = 240): PopPos {
   const gap = 6
   const margin = 16
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1024
@@ -79,13 +81,12 @@ export function SharePopover({
   shareUrl = 'https://popagent.example.com/share/demo',
   webpageOnly = false,
   hideInternetShare = false,
-  copyLabel = '内网链接',
+  copyLabel = '复制链接',
   onCopy,
   onInternetShare,
+  deploymentStatus,
+  onSyncDeployment,
 }: SharePopoverProps) {
-  type SpacePerm = 'hidden' | 'fork' | 'view'
-  const [spacePerm, setSpacePerm] = useState<SpacePerm>('hidden')
-  const [spaceMenuOpen, setSpaceMenuOpen] = useState(false)
   const [internetConfirmOpen, setInternetConfirmOpen] = useState(false)
   const [internetAcknowledged, setInternetAcknowledged] = useState(false)
   const [internetGenerating, setInternetGenerating] = useState(false)
@@ -95,22 +96,26 @@ export function SharePopover({
   const [searchResults, setSearchResults] = useState<ShareMember[]>([])
   const [inviteDirectory, setInviteDirectory] = useState<ShareMember[]>(() => INVITE_CANDIDATES)
   const [selectedInviteIds, setSelectedInviteIds] = useState<string[]>([])
-  const [inviteAdded, setInviteAdded] = useState(false)
   const [copied, setCopied] = useState(false)
   const [pos, setPos] = useState<PopPos>(() => calcPos(anchorRef?.current || null))
   const wrapRef = useRef<HTMLDivElement>(null)
   const inviteEntryRef = useRef<HTMLDivElement>(null)
   const inviteInputRef = useRef<HTMLInputElement>(null)
-  const inviteAddedTimerRef = useRef<number | null>(null)
   const [mounted, setMounted] = useState(false)
   const [manageOpen, setManageOpen] = useState(false)
   const [managePermOpenId, setManagePermOpenId] = useState<string | null>(null)
+  const [localToast, setLocalToast] = useState('')
+  const localToastTimerRef = useRef<number | null>(null)
+  type VisibilityScope = 'partial' | 'company' | 'internet'
+  const [visibilityScope, setVisibilityScope] = useState<VisibilityScope>('partial')
+  const [visibilityMenuOpen, setVisibilityMenuOpen] = useState(false)
+  const previousVisibilityScopeRef = useRef<VisibilityScope>('partial')
 
   useLayoutEffect(() => {
     if (!open) return
     setMounted(true)
     const update = () => {
-      const width = wrapRef.current ? Math.min(560, wrapRef.current.getBoundingClientRect().width || 560) : 560
+      const width = wrapRef.current ? Math.min(480, wrapRef.current.getBoundingClientRect().width || 480) : 480
       const height = wrapRef.current?.getBoundingClientRect().height || (internetConfirmOpen ? 390 : 240)
       setPos(calcPos(anchorRef?.current || null, width, height))
     }
@@ -137,10 +142,10 @@ export function SharePopover({
     setSearching(false)
     setSearchResults([])
     setSelectedInviteIds([])
-    setInviteAdded(false)
-    if (inviteAddedTimerRef.current !== null) {
-      window.clearTimeout(inviteAddedTimerRef.current)
-      inviteAddedTimerRef.current = null
+    setLocalToast('')
+    if (localToastTimerRef.current !== null) {
+      window.clearTimeout(localToastTimerRef.current)
+      localToastTimerRef.current = null
     }
     return () => window.clearTimeout(id)
   }, [open])
@@ -196,11 +201,12 @@ export function SharePopover({
       if (e.key === 'Escape') {
         if (managePermOpenId) { setManagePermOpenId(null); return }
         if (manageOpen) { setManageOpen(false); return }
-        if (spaceMenuOpen) { setSpaceMenuOpen(false); return }
+        if (visibilityMenuOpen) { setVisibilityMenuOpen(false); return }
         if (internetConfirmOpen) {
           setInternetConfirmOpen(false)
           setInternetAcknowledged(false)
           setInternetGenerating(false)
+          setVisibilityScope(previousVisibilityScopeRef.current)
           return
         }
         onClose()
@@ -220,7 +226,7 @@ export function SharePopover({
       document.removeEventListener('keydown', onKey)
       window.removeEventListener('mousedown', onDoc, true)
     }
-  }, [open, onClose, anchorRef, manageOpen, managePermOpenId, spaceMenuOpen, internetConfirmOpen])
+  }, [open, onClose, anchorRef, manageOpen, managePermOpenId, visibilityMenuOpen, internetConfirmOpen])
 
   const copyLink = () => {
     try {
@@ -243,19 +249,7 @@ export function SharePopover({
     window.setTimeout(() => setCopied(false), 1600)
   }
 
-  const spaceLabel: Record<SpacePerm, string> = {
-    hidden: '不可见',
-    fork: '可 Fork',
-    view: '可查看',
-  }
-  const spaceIcon: Record<SpacePerm, string> = {
-    hidden: 'lock',
-    fork: 'export',
-    view: 'magnifying-glass',
-  }
-  const spacePerms: SpacePerm[] = ['hidden', 'fork', 'view']
-
-  const permLabel: Record<MemberPerm, string> = { read: '可阅读', fork: '可 Fork' }
+  const permLabel: Record<MemberPerm, string> = { read: '可阅读', fork: '可复制' }
   const permIcon: Record<MemberPerm, string> = { read: 'magnifying-glass', fork: 'export' }
 
   const visibleMembers = useMemo(() => members, [members])
@@ -276,11 +270,6 @@ export function SharePopover({
   }
 
   const selectInvite = (id: string) => {
-    setInviteAdded(false)
-    if (inviteAddedTimerRef.current !== null) {
-      window.clearTimeout(inviteAddedTimerRef.current)
-      inviteAddedTimerRef.current = null
-    }
     setSelectedInviteIds((ids) => ids.includes(id) ? ids : [...ids, id])
     setSearch('')
     setSearching(false)
@@ -298,21 +287,59 @@ export function SharePopover({
     })
     setSelectedInviteIds([])
     setSearch('')
-    setInviteAdded(true)
-    if (inviteAddedTimerRef.current !== null) window.clearTimeout(inviteAddedTimerRef.current)
-    inviteAddedTimerRef.current = window.setTimeout(() => {
-      setInviteAdded(false)
-      inviteAddedTimerRef.current = null
-    }, 1200)
+    setLocalToast('添加成功')
+    if (localToastTimerRef.current !== null) window.clearTimeout(localToastTimerRef.current)
+    localToastTimerRef.current = window.setTimeout(() => {
+      setLocalToast('')
+      localToastTimerRef.current = null
+    }, 1600)
   }
 
   const closeInternetConfirm = () => {
     setInternetConfirmOpen(false)
     setInternetAcknowledged(false)
     setInternetGenerating(false)
+    setVisibilityScope(previousVisibilityScopeRef.current)
   }
 
   if (!mounted && !open) return null
+
+  const renderInvitePicker = () => (
+    <div className="sh-invite-stack sh-manage-invite-top">
+      <div className="sh-invite-entry">
+        <div ref={inviteEntryRef} className="sh-select sh-invite sh-invite-inline">
+          {selectedInviteMembers.map((member) => (
+            <span key={member.id} className="sh-invite-chip">
+              <span className="sh-invite-chip-avatar" style={{ background: member.avatarColor }}>{member.avatarSeed || member.name.charAt(0)}</span>
+              <span className="sh-invite-chip-name">{member.name}</span>
+              <button type="button" className="sh-invite-chip-remove" onClick={() => setSelectedInviteIds(ids => ids.filter(id => id !== member.id))} aria-label={`移除${member.name}`}>
+                <Icon name="x" cls="ic" />
+              </button>
+            </span>
+          ))}
+          <div className="sh-invite-input-row">
+            <input ref={inviteInputRef} className="sh-invite-input" type="text" placeholder={selectedInviteMembers.length > 0 ? '' : '输入姓名以添加用户'} value={search} onChange={e => setSearch(e.target.value)} aria-label="输入姓名以添加用户" />
+            {searching && <span className="sh-invite-loading">搜索中</span>}
+          </div>
+        </div>
+        {selectedInviteMembers.length > 0 && (
+          <button type="button" className="sh-invite-submit" onClick={submitInvites}>添加</button>
+        )}
+      </div>
+      {(searching || (search.trim() && !searching)) && (
+        <div className="sh-invite-results" role="listbox" aria-label="用户搜索结果">
+          {searching ? (
+            <div className="sh-invite-result-status"><span className="sh-invite-spinner" aria-hidden="true" />正在搜索用户…</div>
+          ) : searchResults.length > 0 ? searchResults.map(member => (
+            <button key={member.id} type="button" className="sh-invite-result" role="option" aria-selected={false} onClick={() => selectInvite(member.id)}>
+              <span className="sh-invite-result-avatar" style={{ background: member.avatarColor }}>{member.avatarSeed || member.name.charAt(0)}</span>
+              <span className="sh-invite-result-main"><span className="sh-invite-result-name">{member.name}</span>{member.dept && <span className="sh-invite-result-dept">{member.dept}</span>}</span>
+            </button>
+          )) : <div className="sh-invite-result-status">未找到匹配用户</div>}
+        </div>
+      )}
+    </div>
+  )
 
   const renderManageView = () => (
     <div className="sh-manage">
@@ -324,6 +351,8 @@ export function SharePopover({
         </button>
         <h3 className="sh-manage-title">管理可访问用户</h3>
       </div>
+
+      {renderInvitePicker()}
 
       <ul className="sh-manage-list">
         {visibleMembers.map((m) => (
@@ -357,7 +386,7 @@ export function SharePopover({
                 <div className="sh-space-perm-menu sh-manage-perm-menu" role="listbox" aria-label={`${m.name} 的访问权限`}>
                   <div className="sh-space-perm-menu-title">访问权限</div>
                   {(['read', 'fork', 'remove'] as const).map((perm) => {
-                    const labels = { read: '可阅读', fork: '可 Fork', remove: '移除' }
+                    const labels = { read: '可阅读', fork: '可复制', remove: '移除' }
                     const icons = { read: 'magnifying-glass', fork: 'export', remove: 'x' }
                     return (
                       <button
@@ -450,6 +479,15 @@ export function SharePopover({
     </div>
   )
 
+  const webAppOutdated = deploymentStatus === 'outdated'
+  const webAppDeploying = Boolean(deploymentStatus && deploymentStatus !== 'outdated' && deploymentStatus !== 'deployed')
+  const deploymentSteps = [
+    { id: 'building', label: '构建' },
+    { id: 'packing', label: '打包' },
+    { id: 'deploying', label: '部署' },
+  ] as const
+  const activeDeploymentIndex = deploymentStatus === 'packing' ? 1 : deploymentStatus === 'deploying' ? 2 : 0
+
   const renderShareView = () => (
     <>
       <div className="sh-head">
@@ -475,49 +513,48 @@ export function SharePopover({
               )}
           </button>
         </div>
-      ) : (
-        <div className="sh-link-row">
-          <div className="sh-link-box">
-            <span className="sh-link-text">{shareUrl}</span>
-          </div>
-          <button type="button" className="sh-copy-btn" onClick={copyLink}>
-            {copied
-              ? (
-                <>
-                  <Icon name="check" cls="ic sh-copy-ic" />
-                  <span>已复制</span>
-                </>
-              )
-              : (
-                <>
-                  <Icon name="copy" cls="ic sh-copy-ic" />
-                  <span>{copyLabel}</span>
-                </>
-              )}
-          </button>
-          {!hideInternetShare && (
-            <button
-              type="button"
-              className="sh-internet-btn"
-              aria-label="对外分享"
-              onClick={() => {
-                setInternetConfirmOpen(true)
-                setInternetAcknowledged(false)
-                setInternetGenerating(false)
-              }}
-            >
-              <Icon name="export" cls="ic sh-internet-ic" />
-              <span>对外分享</span>
-            </button>
-          )}
-        </div>
-      )}
+      ) : null}
 
       {!webpageOnly && (
         <>
         <div className="sh-access-row">
-        <span className="sh-access-label">指定可访问的用户</span>
-        <button type="button" className="sh-target-chip" onClick={() => setManageOpen(true)} aria-label="管理可访问用户">
+        <span className="sh-access-label">可访问范围</span>
+        <div className="sh-visibility-picker">
+          <button type="button" className="sh-visibility-trigger" aria-haspopup="listbox" aria-expanded={visibilityMenuOpen} onClick={() => setVisibilityMenuOpen(openState => !openState)}>
+            <span>{{ partial: '部分人可见', company: '企业内可见', internet: '互联网可见' }[visibilityScope]}</span>
+            <Icon name="caret-down" cls="ic" />
+          </button>
+          {visibilityMenuOpen && (
+            <div className="sh-visibility-menu" role="listbox" aria-label="访问范围">
+              {([
+                ['partial', '部分人可见'],
+                ['company', '企业内可见'],
+                ['internet', '互联网可见'],
+              ] as const).map(([value, label]) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={visibilityScope === value}
+                  key={value}
+                  onClick={() => {
+                    setVisibilityScope(value)
+                    setVisibilityMenuOpen(false)
+                    if (value === 'internet') {
+                      previousVisibilityScopeRef.current = visibilityScope
+                      setInternetConfirmOpen(true)
+                      setInternetAcknowledged(false)
+                      setInternetGenerating(false)
+                    }
+                  }}
+                >
+                  <span>{label}</span>
+                  {visibilityScope === value && <Icon name="check" cls="ic" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {visibilityScope === 'partial' && <button type="button" className="sh-target-chip" onClick={() => setManageOpen(true)} aria-label="管理可访问用户">
           <span className="sh-target-avatars">
             {visibleMembers.slice(0, shownCount).map((m) => (
               <span key={m.id} className="sh-target-av" style={{ background: m.avatarColor }}>
@@ -529,131 +566,46 @@ export function SharePopover({
             )}
           </span>
           <Icon name="arrow-right" cls="ic sh-target-arrow" />
-        </button>
-        <div className="sh-invite-stack">
-          <div className="sh-invite-entry">
-            <div ref={inviteEntryRef} className="sh-select sh-invite sh-invite-inline">
-              {selectedInviteMembers.map((member) => (
-                <span key={member.id} className="sh-invite-chip">
-                  <span className="sh-invite-chip-avatar" style={{ background: member.avatarColor }}>
-                    {member.avatarSeed || member.name.charAt(0)}
-                  </span>
-                  <span className="sh-invite-chip-name">{member.name}</span>
-                  <button
-                    type="button"
-                    className="sh-invite-chip-remove"
-                    onClick={() => setSelectedInviteIds((ids) => ids.filter((id) => id !== member.id))}
-                    aria-label={`移除${member.name}`}
-                  >
-                    <Icon name="x" cls="ic" />
-                  </button>
-                </span>
-              ))}
-              <div className="sh-invite-input-row">
-                <input
-                  ref={inviteInputRef}
-                  className="sh-invite-input"
-                  type="text"
-                  placeholder={selectedInviteMembers.length > 0 ? '' : '输入姓名以添加用户'}
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  aria-label="输入姓名以添加用户"
-                />
-                {searching && <span className="sh-invite-loading">搜索中</span>}
-              </div>
-            </div>
-            {(selectedInviteMembers.length > 0 || inviteAdded) && (
-              <button type="button" className="sh-invite-submit" onClick={submitInvites} disabled={inviteAdded}>
-                {inviteAdded ? '添加成功' : '添加'}
-              </button>
-            )}
-          </div>
+        </button>}
+        </div>
 
-          {(searching || (search.trim() && !searching)) && (
-            <div className="sh-invite-results" role="listbox" aria-label="用户搜索结果">
-              {searching ? (
-                <div className="sh-invite-result-status">
-                  <span className="sh-invite-spinner" aria-hidden="true" />
-                  正在搜索用户…
-                </div>
-              ) : searchResults.length > 0 ? (
-                searchResults.map((member) => {
-                  return (
-                    <button
-                      key={member.id}
-                      type="button"
-                      className="sh-invite-result"
-                      role="option"
-                      aria-selected={false}
-                      onClick={() => selectInvite(member.id)}
-                    >
-                      <span className="sh-invite-result-avatar" style={{ background: member.avatarColor }}>
-                        {member.avatarSeed || member.name.charAt(0)}
-                      </span>
-                      <span className="sh-invite-result-main">
-                        <span className="sh-invite-result-name">{member.name}</span>
-                        {member.dept && <span className="sh-invite-result-dept">{member.dept}</span>}
-                      </span>
-                    </button>
-                  )
-                })
-              ) : (
-                <div className="sh-invite-result-status">未找到匹配用户</div>
-              )}
+        {webAppOutdated && (
+          <div className="sh-sync-notice sh-sync-notice-bottom" role="status">
+            <span className="sh-sync-notice-icon"><Icon name="warning-circle" cls="ic" /></span>
+            <div><strong>本应用有修改，是否同步到线上链接？</strong></div>
+            <button type="button" onClick={onSyncDeployment}>同步</button>
+          </div>
+        )}
+
+        <div className="sh-foot sh-copy-foot sh-link-action-row">
+          {webAppDeploying ? (
+          <div className="sh-deployment-card sh-deployment-card-bottom" role="status" aria-live="polite" aria-label={`正在${deploymentSteps[activeDeploymentIndex].label}`}>
+            <div className="sh-deployment-heading">
+              <strong>分享链接生成中</strong>
             </div>
+            <div className="sh-deployment-steps">
+              {deploymentSteps.map((step, index) => {
+                const completed = index < activeDeploymentIndex
+                const active = index === activeDeploymentIndex
+                return (
+                  <div className={'sh-deployment-step' + (completed ? ' completed' : '') + (active ? ' active' : '')} key={step.id}>
+                    <span className="sh-deployment-node" aria-hidden="true">
+                      {completed ? <Icon name="check" cls="ic" /> : active ? <span className="sh-deployment-spinner" /> : index + 1}
+                    </span>
+                    <strong>{step.label}</strong>
+                    {index < deploymentSteps.length - 1 && <span className="sh-deployment-line" />}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+          ) : (
+            <div className="sh-link-box"><span className="sh-link-text">{shareUrl}</span></div>
           )}
-        </div>
-        </div>
-
-        <div className="sh-space-access-row">
-        <div className="sh-space-foot">
-          <span className="sh-space-foot-label">对空间成员</span>
-          <div className={'sh-space-perm-picker' + (spaceMenuOpen ? ' is-open' : '')}>
-            <button
-              type="button"
-              className="sh-space-perm-trigger"
-              aria-expanded={spaceMenuOpen}
-              aria-haspopup="listbox"
-              onClick={() => setSpaceMenuOpen((openState) => !openState)}
-            >
-              <Icon name={spaceIcon[spacePerm]} cls="ic sh-space-perm-trigger-ic" />
-              <span className="sh-space-perm-label">{spaceLabel[spacePerm]}</span>
-              <Icon name="caret-down" cls="ic sh-space-perm-caret" />
-            </button>
-
-            {spaceMenuOpen && (
-              <div className="sh-space-perm-menu" role="listbox" aria-label="对空间成员权限">
-                <div className="sh-space-perm-menu-title">空间成员权限</div>
-                {spacePerms.map((perm) => (
-                  <button
-                    key={perm}
-                    type="button"
-                    className="sh-space-perm-option"
-                    role="option"
-                    aria-selected={spacePerm === perm}
-                    onClick={() => {
-                      setSpacePerm(perm)
-                      setSpaceMenuOpen(false)
-                    }}
-                  >
-                    <Icon name={spaceIcon[perm]} cls="ic sh-space-perm-option-ic" />
-                    <span>{spaceLabel[perm]}</span>
-                    {spacePerm === perm && <Icon name="check" cls="ic sh-space-perm-check" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-        </div>
-
-        <div className="sh-foot">
-        <p className="sh-sub">
-          <span className="sh-sub-ic" aria-hidden="true">
-            <Icon name="info" cls="ic" />
-          </span>
-          <span className="sh-sub-text">访问权限对本项目的对话记录与产物分享同时生效</span>
-        </p>
+          <button type="button" className="sh-copy-btn" onClick={copyLink} disabled={webAppDeploying}>
+            <Icon name={copied ? 'check' : 'copy'} cls="ic sh-copy-ic" />
+            <span>{copied ? '已复制' : copyLabel}</span>
+          </button>
         </div>
         </>
       )}
@@ -678,6 +630,7 @@ export function SharePopover({
         aria-label={manageOpen ? '管理可访问用户' : internetConfirmOpen ? '分享到互联网' : title}
       >
         {manageOpen ? renderManageView() : internetConfirmOpen ? renderInternetConfirmView() : renderShareView()}
+        {localToast && <div className="sh-local-toast" role="status"><Icon name="check" cls="ic" />{localToast}</div>}
       </div>
     </div>
   )

@@ -36,7 +36,7 @@ export interface Folder {
 }
 
 export interface SidebarTask {
-  id: string; title: string; dot: string; skill_id: string | null; cloud?: boolean; group?: boolean
+  id: string; title: string; dot: string; skill_id: string | null; pinned?: boolean; cloud?: boolean; group?: boolean
 }
 
 export interface TraceStep { tool: string; connector: string; label: string; status: 'run' | 'ok' | 'err' | 'auth'; ms: number }
@@ -45,6 +45,8 @@ export interface KPIData { label: string; value: string; delta?: string; status?
 export interface Insight { idx: number; title: string; summary: string; bullets: string[] }
 export interface KanbanPreview {
   type: 'webapp'
+  theme?: 'sand' | 'violet'
+  revision?: number
   subtitle: string
   title: string
   description: string
@@ -130,6 +132,7 @@ export interface Message {
 
 export interface TaskDetail {
   id: string; title: string; folder_id: string; skill_id: string | null; status: string; dot: string
+  pinned?: boolean
   messages: Message[]; skill: { id: string; name: string; color: string; icon: string } | null
 }
 
