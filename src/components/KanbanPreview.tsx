@@ -21,6 +21,10 @@ interface Props {
   onSelectApp: (id: string) => void
   onClose?: () => void
   onInternetShare?: () => void
+  externalShareStatus?: 'idle' | 'applying' | 'approved' | 'generating' | 'generated'
+  externalShareRequested?: boolean
+  externalAgentGenerating?: boolean
+  onExternalShareAction?: () => void
 }
 
 type WorkspaceTabId = 'preview' | 'code' | 'config' | 'evolution' | 'service' | 'history'
@@ -560,7 +564,7 @@ function AgentTestPreview({
   )
 }
 
-export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, onClose, onInternetShare }: Props) {
+export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, onClose, onInternetShare, externalShareStatus = 'idle', externalShareRequested = false, externalAgentGenerating = false, onExternalShareAction }: Props) {
   const toast = useToast()
   type WebApprovalStatus = 'idle' | 'reviewing' | 'approved'
   const [menuOpen, setMenuOpen] = useState(false)
@@ -671,6 +675,14 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     setSkillTestOpen(Boolean(restoredSkillState?.testOpen))
     setPendingWorkspaceTab(null)
   }, [appKey, restoredSkillState?.testOpen])
+
+  useEffect(() => {
+    if (data?.type === 'sharepage') setShareOpen(true)
+  }, [appKey, data?.type])
+
+  useEffect(() => {
+    if (data?.type === 'webapp' && externalShareRequested) setShareOpen(true)
+  }, [appKey, data?.type, externalShareRequested])
 
   const startWebDeployment = (targetAppKey: string) => {
     webDeployTimersRef.current.forEach(timer => window.clearTimeout(timer))
@@ -819,7 +831,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   const shareUrl = data && data.type === 'sharepage' ? data.footer.share_url : document.location.href
 
   const copyWebpageLink = () => {
-    if (webApprovalStatus !== 'approved') return
+    if (data?.type === 'sharepage' && externalShareStatus !== 'generated') return
     try {
       const el = document.createElement('div')
       el.textContent = shareUrl
@@ -939,6 +951,10 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
         onInternetShare={onInternetShare ? () => onInternetShare() : undefined}
         deploymentStatus={data?.type === 'webapp' ? webDeploymentStatus : undefined}
         onSyncDeployment={data?.type === 'webapp' ? () => startWebDeployment(appKey) : undefined}
+        externalShareStatus={(data?.type === 'sharepage' || data?.type === 'webapp') ? externalShareStatus : undefined}
+        externalShareRequested={data?.type === 'webapp' && externalShareRequested}
+        externalAgentGenerating={externalAgentGenerating}
+        onExternalShareAction={onExternalShareAction}
       />
     </div>
   )
@@ -1207,27 +1223,20 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
       <div className="kb-wrap">
         {workspaceHeader}
         <div className="kb-web-share-bar">
-          <span className="kb-web-share-notice">
-            {webApprovalStatus === 'reviewing' ? '页面通过审核后，可以复制到外部。' : '对外分享需审批，请确认数据安全'}
-          </span>
+          <span className="kb-web-share-notice">{externalShareStatus === 'generated' ? '互联网可见' : '网页正在制作中'}</span>
           <button
             type="button"
             className="sh-copy-btn kb-web-copy-btn"
-            disabled={webApprovalStatus === 'reviewing'}
-            onClick={webApprovalStatus === 'approved' ? copyWebpageLink : () => setWebApprovalOpen(true)}
+            disabled={externalShareStatus !== 'generated'}
+            onClick={copyWebpageLink}
           >
-            {webApprovalStatus !== 'reviewing' && (
-              <Icon name={webLinkCopied ? 'check' : 'copy'} cls="ic sh-copy-ic" />
-            )}
-            <span>
-              {webApprovalStatus === 'reviewing' ? '审核中' : webLinkCopied ? '已复制' : '复制链接'}
-            </span>
+            <Icon name={webLinkCopied ? 'check' : 'copy'} cls="ic sh-copy-ic" />
+            <span>{webLinkCopied ? '已复制' : '复制链接'}</span>
           </button>
         </div>
         <div className="kb-body kb-body-web">
           <SharePagePreview data={w} />
         </div>
-        {renderWebApprovalDialog()}
       </div>
     )
   }

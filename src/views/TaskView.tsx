@@ -17,6 +17,7 @@ export interface AppPreviewItem {
 }
 
 type PermissionLevel = 'L2' | 'L3'
+type ExternalShareStatus = 'idle' | 'applying' | 'approved' | 'generating' | 'generated'
 
 const PERMISSION_LEVEL_DETAILS: Record<PermissionLevel, { method: string; domains: string[] }> = {
   L2: {
@@ -41,6 +42,8 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
   const [selectedRoundIds, setSelectedRoundIds] = useState<string[]>([])
   const [permissionRequest, setPermissionRequest] = useState<{ levels: PermissionLevel[]; messageId: string } | null>(null)
   const [permissionStatus, setPermissionStatus] = useState<'ready' | 'submitting' | 'approved'>('ready')
+  const [externalShareStatus, setExternalShareStatus] = useState<ExternalShareStatus>('idle')
+  const [externalShareRequested, setExternalShareRequested] = useState(false)
   const laneRef = useRef<HTMLDivElement>(null)
   const toast = useToast()
 
@@ -50,9 +53,11 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
   const scrollAnchorRef = useRef<HTMLDivElement>(null)
   const rafRef = useRef<number | null>(null)
   const permissionTimerRef = useRef<number | null>(null)
+  const externalShareTimerRef = useRef<number | null>(null)
 
   useEffect(() => () => {
     if (permissionTimerRef.current !== null) window.clearTimeout(permissionTimerRef.current)
+    if (externalShareTimerRef.current !== null) window.clearTimeout(externalShareTimerRef.current)
   }, [])
 
   useEffect(() => {
@@ -128,6 +133,8 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
     setCurrentAppId(null)
     setShareMode(false)
     setSelectedRoundIds([])
+    setExternalShareStatus('idle')
+    setExternalShareRequested(false)
   }, [taskId])
 
   useEffect(() => {
@@ -358,9 +365,37 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
   }
 
   const startInternetShare = () => {
-    const prompt = '做一个对外链接'
+    const prompt = '做一个对外连接'
+    setExternalShareRequested(true)
+    setExternalShareStatus('idle')
     setDraft(prompt)
     window.setTimeout(() => send(prompt), 0)
+  }
+
+  const externalShareUrl = `https://popagent.example.com/webapp/${taskId || 'demo'}`
+
+  const handleExternalShareAction = async () => {
+    if (externalShareStatus === 'idle') {
+      setExternalShareStatus('applying')
+      externalShareTimerRef.current = window.setTimeout(() => {
+        setExternalShareStatus('approved')
+        externalShareTimerRef.current = null
+        toast('分享申请已通过')
+      }, 1200)
+      return
+    }
+    if (externalShareStatus === 'approved') {
+      setExternalShareStatus('generating')
+      externalShareTimerRef.current = window.setTimeout(() => {
+        setExternalShareStatus('generated')
+        externalShareTimerRef.current = null
+        toast('分享链接已生成')
+      }, 3600)
+      return
+    }
+    if (externalShareStatus === 'generated' && externalShareUrl) {
+      try { await navigator.clipboard.writeText(externalShareUrl); toast('分享链接已复制') } catch { toast('复制失败') }
+    }
   }
 
   const formatMessageTime = (value?: number) => {
@@ -536,6 +571,10 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
                 setPreviewOpen(false)
               }}
               onInternetShare={startInternetShare}
+              externalShareStatus={externalShareStatus}
+              externalShareRequested={externalShareRequested}
+              externalAgentGenerating={busy && externalShareRequested}
+              onExternalShareAction={handleExternalShareAction}
             />
           </div>
         )}
