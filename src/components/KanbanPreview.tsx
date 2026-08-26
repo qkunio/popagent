@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, useToast } from './Icon'
 import { SharePagePreview } from './SharePagePreview'
-import { SharePopover } from './SharePopover'
+import { SharePopover, type VisibilityScope, type WebDeploymentStatus } from './SharePopover'
 import { SkillDetailDialog } from './SkillDetailDialog'
 import { SkillAppPreview, type SkillAppPreviewHandle } from './SkillAppPreview'
 import { ScriptAppPreview } from './ScriptAppPreview'
@@ -24,8 +24,45 @@ interface Props {
   externalShareStatus?: 'idle' | 'applying' | 'approved' | 'generating' | 'generated'
   externalShareRequested?: boolean
   externalAgentGenerating?: boolean
+  externalAnnouncementPending?: boolean
   onExternalShareAction?: () => void
-  onExternalShareSync?: () => void
+  webDeploymentErrorNonce?: number
+  webAppScopeKey?: string
+}
+
+type WebLinkTarget = 'internal' | 'public'
+type WebLinkDeployment = {
+  url: string | null
+  deployedVersion: number
+  targetVersion: number
+  status: WebDeploymentStatus
+  error?: string
+}
+type WebPublishState = {
+  visibility: VisibilityScope
+  publicPreparationDone: boolean
+  internal: WebLinkDeployment
+  public: WebLinkDeployment
+}
+
+const EMPTY_WEB_LINK: WebLinkDeployment = { url: null, deployedVersion: 0, targetVersion: 0, status: 'missing' }
+
+function makeWebPublishState(): WebPublishState {
+  return {
+    visibility: 'partial',
+    publicPreparationDone: false,
+    internal: { ...EMPTY_WEB_LINK },
+    public: { ...EMPTY_WEB_LINK },
+  }
+}
+
+function webLinkTarget(scope: VisibilityScope): WebLinkTarget {
+  return scope === 'internet' ? 'public' : 'internal'
+}
+
+function makeWebLink(key: string, target: WebLinkTarget): string {
+  const token = encodeURIComponent(key.toLowerCase().replace(/\s+/g, '-'))
+  return `https://popagent.example.com/${target === 'public' ? 'webapp' : 'internal'}/${token}`
 }
 
 type WorkspaceTabId = 'preview' | 'code' | 'config' | 'evolution' | 'service' | 'history'
@@ -565,7 +602,7 @@ function AgentTestPreview({
   )
 }
 
-export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, onClose, onInternetShare, externalShareStatus = 'idle', externalShareRequested = false, externalAgentGenerating = false, onExternalShareAction, onExternalShareSync }: Props) {
+export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, onClose, onInternetShare, externalShareStatus = 'idle', externalShareRequested = false, externalAgentGenerating = false, externalAnnouncementPending = false, onExternalShareAction, webDeploymentErrorNonce = 0, webAppScopeKey = '' }: Props) {
   const toast = useToast()
   type WebApprovalStatus = 'idle' | 'reviewing' | 'approved'
   const [menuOpen, setMenuOpen] = useState(false)
@@ -574,9 +611,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   const [webApprovalReason, setWebApprovalReason] = useState('')
   const [webApprovalStatus, setWebApprovalStatus] = useState<WebApprovalStatus>('idle')
   const [webLinkCopied, setWebLinkCopied] = useState(false)
-  type WebDeployStatus = 'outdated' | 'building' | 'packing' | 'deploying' | 'deployed'
-  const [webDeployByApp, setWebDeployByApp] = useState<Record<string, WebDeployStatus>>({})
-  const [webExternalOutdatedByApp, setWebExternalOutdatedByApp] = useState<Record<string, boolean>>({})
+  const [webPublishByApp, setWebPublishByApp] = useState<Record<string, WebPublishState>>({})
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [tabsByApp, setTabsByApp] = useState<Record<string, WorkspaceTabId[]>>({})
   const [activeTabByApp, setActiveTabByApp] = useState<Record<string, WorkspaceTabId | null>>({})
@@ -602,8 +637,8 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   const agentPublishAnchorRef = useRef<HTMLDivElement>(null)
   const copyTimerRef = useRef<number | null>(null)
   const approvalTimerRef = useRef<number | null>(null)
-  const webDeployTimersRef = useRef<number[]>([])
-  const webRevisionSeenRef = useRef<Record<string, number>>({})
+  const webDeployTimersRef = useRef<Record<string, number[]>>({})
+  const webDeploymentErrorHandledRef = useRef(0)
   const skillPreviewRef = useRef<SkillAppPreviewHandle>(null)
 
   useEffect(() => {
@@ -657,11 +692,16 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   useEffect(() => () => {
     if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current)
     if (approvalTimerRef.current !== null) window.clearTimeout(approvalTimerRef.current)
+    Object.values(webDeployTimersRef.current).flat().forEach(timer => window.clearTimeout(timer))
   }, [])
 
   const currentApp = apps.find(a => a.id === currentAppId) || apps[apps.length - 1] || null
   const appKey = currentApp?.id || '__empty__'
-  const webDeploymentStatus = webDeployByApp[appKey] || 'building'
+  const webAppKey = data?.type === 'webapp' ? `webapp:${webAppScopeKey || data.title}` : appKey
+  const editorVersion = data?.type === 'webapp' ? (data.revision || 0) + 1 : 0
+  const webPublishState = webPublishByApp[webAppKey] || makeWebPublishState()
+  const activeWebLinkTarget = webLinkTarget(webPublishState.visibility)
+  const activeWebLink = webPublishState[activeWebLinkTarget]
   const restoredSkillState = useMemo(() => readPreviewSession<SkillAppSessionState>('skill', appKey), [appKey])
   const restoredWorkspaceState = useMemo(() => readPreviewSession<WorkspacePreviewSessionState>('workspace', appKey), [appKey])
   const skillFiles = data?.type === 'skill' ? (skillFilesByApp[appKey] || restoredSkillState?.files || data.files) : []
@@ -689,40 +729,131 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     if (data?.type === 'webapp' && externalShareRequested) setShareOpen(true)
   }, [appKey, data?.type, externalShareRequested])
 
-  const startWebDeployment = (targetAppKey: string) => {
-    webDeployTimersRef.current.forEach(timer => window.clearTimeout(timer))
-    webDeployTimersRef.current = []
-    setWebDeployByApp(current => ({ ...current, [targetAppKey]: 'building' }))
-    webDeployTimersRef.current = [
-      window.setTimeout(() => setWebDeployByApp(current => ({ ...current, [targetAppKey]: 'packing' })), 1800),
-      window.setTimeout(() => setWebDeployByApp(current => ({ ...current, [targetAppKey]: 'deploying' })), 3600),
-      window.setTimeout(() => setWebDeployByApp(current => ({ ...current, [targetAppKey]: 'deployed' })), 5600),
-    ]
+  const startWebDeployment = (targetAppKey: string, target: WebLinkTarget, version: number, approvalSubmitted = false) => {
+    const timerKey = `${targetAppKey}:${target}`
+    ;(webDeployTimersRef.current[timerKey] || []).forEach(timer => window.clearTimeout(timer))
+    const needsApproval = target === 'public' && !approvalSubmitted
+    setWebPublishByApp(current => {
+      const state = current[targetAppKey] || makeWebPublishState()
+      return {
+        ...current,
+        [targetAppKey]: {
+          ...state,
+          ...(target === 'public' ? { publicPreparationDone: true } : {}),
+          [target]: {
+            ...state[target],
+            targetVersion: version,
+            status: needsApproval ? 'approval' : target === 'public' ? 'reviewing' : 'deploying',
+            error: undefined,
+          },
+        },
+      }
+    })
+
+    const approveDeployment = () => setWebPublishByApp(current => {
+      const state = current[targetAppKey]
+      if (!state || state[target].targetVersion !== version || state[target].status !== 'reviewing') return current
+      return { ...current, [targetAppKey]: { ...state, [target]: { ...state[target], status: 'approved' } } }
+    })
+    const completeDeployment = () => setWebPublishByApp(current => {
+      const state = current[targetAppKey]
+      const link = state?.[target]
+      if (!state || !link || link.targetVersion !== version || link.status === 'error') return current
+      return {
+        ...current,
+        [targetAppKey]: {
+          ...state,
+          [target]: {
+            ...link,
+            url: link.url || makeWebLink(targetAppKey, target),
+            deployedVersion: version,
+            status: 'deployed',
+            error: undefined,
+          },
+        },
+      }
+    })
+
+    if (needsApproval) {
+      webDeployTimersRef.current[timerKey] = []
+      return
+    }
+    webDeployTimersRef.current[timerKey] = target === 'public'
+      ? [window.setTimeout(approveDeployment, 1600)]
+      : [window.setTimeout(completeDeployment, 3000)]
+  }
+
+  const generateApprovedWebLink = (targetAppKey: string, version: number) => {
+    const target: WebLinkTarget = 'public'
+    const timerKey = `${targetAppKey}:${target}`
+    ;(webDeployTimersRef.current[timerKey] || []).forEach(timer => window.clearTimeout(timer))
+    setWebPublishByApp(current => {
+      const state = current[targetAppKey] || makeWebPublishState()
+      const link = state.public
+      if (link.targetVersion !== version || link.status !== 'approved') return current
+      return { ...current, [targetAppKey]: { ...state, public: { ...link, status: 'deploying' } } }
+    })
+    webDeployTimersRef.current[timerKey] = [window.setTimeout(() => {
+      setWebPublishByApp(current => {
+        const state = current[targetAppKey]
+        const link = state?.public
+        if (!state || !link || link.targetVersion !== version || link.status !== 'deploying') return current
+        return {
+          ...current,
+          [targetAppKey]: {
+            ...state,
+            publicPreparationDone: true,
+            public: {
+              ...link,
+              url: link.url || makeWebLink(targetAppKey, 'public'),
+              deployedVersion: version,
+              status: 'deployed',
+              error: undefined,
+            },
+          },
+        }
+      })
+    }, 3000)]
   }
 
   useEffect(() => {
-    webDeployTimersRef.current.forEach(timer => window.clearTimeout(timer))
-    webDeployTimersRef.current = []
-    if (data?.type !== 'webapp' || webDeployByApp[appKey] === 'deployed') return
-    if ((data.revision || 0) > 0) {
-      setWebDeployByApp(current => ({ ...current, [appKey]: 'outdated' }))
-      return
-    }
-    startWebDeployment(appKey)
-    return () => {
-      webDeployTimersRef.current.forEach(timer => window.clearTimeout(timer))
-      webDeployTimersRef.current = []
-    }
-  }, [appKey, data?.type])
+    if (data?.type !== 'webapp') return
+    if (activeWebLinkTarget === 'public' && externalAnnouncementPending) return
+    const inFlightForCurrentVersion = activeWebLink.targetVersion === editorVersion
+      && (activeWebLink.status === 'approval' || activeWebLink.status === 'reviewing' || activeWebLink.status === 'approved' || activeWebLink.status === 'deploying')
+    if (activeWebLink.status === 'error' && activeWebLink.targetVersion === editorVersion) return
+    if (activeWebLink.url && activeWebLink.deployedVersion === editorVersion && activeWebLink.status === 'deployed') return
+    if (inFlightForCurrentVersion) return
+    startWebDeployment(webAppKey, activeWebLinkTarget, editorVersion)
+  }, [webAppKey, editorVersion, activeWebLinkTarget, activeWebLink.url, activeWebLink.deployedVersion, activeWebLink.targetVersion, activeWebLink.status, data?.type, externalAnnouncementPending])
 
   useEffect(() => {
-    if (data?.type !== 'webapp') return
-    const revision = data.revision || 0
-    const previousRevision = webRevisionSeenRef.current[appKey]
-    webRevisionSeenRef.current[appKey] = revision
-    if (revision <= 0 || previousRevision === revision || !externalShareRequested || externalShareStatus !== 'generated') return
-    setWebExternalOutdatedByApp(current => current[appKey] ? current : { ...current, [appKey]: true })
-  }, [appKey, data?.type, data?.type === 'webapp' ? data.revision : 0, externalShareRequested, externalShareStatus])
+    if (!webDeploymentErrorNonce) {
+      webDeploymentErrorHandledRef.current = 0
+      return
+    }
+    if (webDeploymentErrorHandledRef.current === webDeploymentErrorNonce || data?.type !== 'webapp') return
+    webDeploymentErrorHandledRef.current = webDeploymentErrorNonce
+    const timerKey = `${webAppKey}:${activeWebLinkTarget}`
+    ;(webDeployTimersRef.current[timerKey] || []).forEach(timer => window.clearTimeout(timer))
+    webDeployTimersRef.current[timerKey] = []
+    setWebPublishByApp(current => {
+      const state = current[webAppKey] || makeWebPublishState()
+      return {
+        ...current,
+        [webAppKey]: {
+          ...state,
+          [activeWebLinkTarget]: {
+            ...state[activeWebLinkTarget],
+            targetVersion: editorVersion,
+            status: 'error',
+            error: `WebApp V${editorVersion} 部署失败\nError: build artifact upload failed\nTarget: ${activeWebLinkTarget === 'public' ? 'internet' : 'internal'}`,
+          },
+        },
+      }
+    })
+    setShareOpen(true)
+  }, [activeWebLinkTarget, data?.type, editorVersion, webAppKey, webDeploymentErrorNonce])
 
   const activateWorkspaceTab = (tabId: WorkspaceTabId) => {
     if (data?.type === 'skill' && skillAppDirty && activeWorkspaceTab === 'preview' && tabId !== 'preview') {
@@ -844,7 +975,11 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     </div>
   )
 
-  const shareUrl = data && data.type === 'sharepage' ? data.footer.share_url : document.location.href
+  const shareUrl = data?.type === 'webapp'
+    ? activeWebLink.url || ''
+    : data?.type === 'sharepage'
+      ? data.footer.share_url
+      : document.location.href
 
   const copyWebpageLink = () => {
     if (data?.type === 'sharepage' && externalShareStatus !== 'generated') return
@@ -965,23 +1100,32 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
         hideInternetShare={data?.type === 'agent'}
         copyLabel={data?.type === 'agent' ? '复制链接' : undefined}
         onInternetShare={onInternetShare ? () => onInternetShare() : undefined}
-        deploymentStatus={data?.type === 'webapp' ? webDeploymentStatus : undefined}
-        onSyncDeployment={data?.type === 'webapp' ? () => startWebDeployment(appKey) : undefined}
-        onSyncExternalShare={data?.type === 'webapp' ? () => {
-          setWebDeployByApp(current => ({ ...current, [appKey]: 'deployed' }))
-          setWebExternalOutdatedByApp(current => ({ ...current, [appKey]: false }))
-          onExternalShareSync?.()
-        } : undefined}
+        deploymentStatus={data?.type === 'webapp' ? activeWebLink.status : undefined}
+        deploymentError={data?.type === 'webapp' ? activeWebLink.error : undefined}
+        deploymentTarget={data?.type === 'webapp' ? activeWebLinkTarget === 'public' ? '互联网链接' : '企业内链接' : undefined}
+        deploymentVersion={data?.type === 'webapp' ? editorVersion : undefined}
+        onSyncDeployment={data?.type === 'webapp' ? () => startWebDeployment(webAppKey, activeWebLinkTarget, editorVersion) : undefined}
+        onSubmitDeploymentApproval={data?.type === 'webapp' ? () => startWebDeployment(webAppKey, 'public', editorVersion, true) : undefined}
+        onGenerateDeployment={data?.type === 'webapp' ? () => generateApprovedWebLink(webAppKey, editorVersion) : undefined}
         externalShareStatus={(data?.type === 'sharepage' || data?.type === 'webapp') ? externalShareStatus : undefined}
-        externalShareRequested={data?.type === 'webapp' && externalShareRequested}
+        externalShareRequested={data?.type === 'sharepage' && externalShareRequested}
         externalAgentGenerating={externalAgentGenerating}
-        externalOnlineOutdated={data?.type === 'webapp' && Boolean(webExternalOutdatedByApp[appKey])}
-        onExternalShareAction={() => {
-          if (data?.type === 'webapp' && externalShareStatus === 'approved') {
-            setWebDeployByApp(current => ({ ...current, [appKey]: 'deployed' }))
-          }
-          onExternalShareAction?.()
-        }}
+        onExternalShareAction={onExternalShareAction}
+        managedWebAppDeployment={data?.type === 'webapp'}
+        controlledVisibilityScope={data?.type === 'webapp' ? webPublishState.visibility : undefined}
+        internetPreparationDone={data?.type === 'webapp' ? webPublishState.publicPreparationDone : undefined}
+        onInternetPreparationConfirmed={data?.type === 'webapp' ? () => {
+          setWebPublishByApp(current => {
+            const state = current[webAppKey] || makeWebPublishState()
+            return { ...current, [webAppKey]: { ...state, publicPreparationDone: true } }
+          })
+        } : undefined}
+        onVisibilityScopeChange={data?.type === 'webapp' ? (visibility) => {
+          setWebPublishByApp(current => {
+            const state = current[webAppKey] || makeWebPublishState()
+            return { ...current, [webAppKey]: { ...state, visibility } }
+          })
+        } : undefined}
       />
     </div>
   )

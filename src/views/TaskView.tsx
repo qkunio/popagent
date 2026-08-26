@@ -45,7 +45,8 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
   const [permissionStatus, setPermissionStatus] = useState<'ready' | 'submitting' | 'approved'>('ready')
   const [externalShareStatus, setExternalShareStatus] = useState<ExternalShareStatus>('idle')
   const [externalShareRequested, setExternalShareRequested] = useState(false)
-  const [externalSyncWaiting, setExternalSyncWaiting] = useState(false)
+  const [externalShareAnnouncementPending, setExternalShareAnnouncementPending] = useState(false)
+  const [webDeploymentErrorNonce, setWebDeploymentErrorNonce] = useState(0)
   const laneRef = useRef<HTMLDivElement>(null)
   const toast = useToast()
 
@@ -137,7 +138,8 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
     setSelectedRoundIds([])
     setExternalShareStatus('idle')
     setExternalShareRequested(false)
-    setExternalSyncWaiting(false)
+    setExternalShareAnnouncementPending(false)
+    setWebDeploymentErrorNonce(0)
   }, [taskId])
 
   useEffect(() => {
@@ -328,11 +330,13 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
       setProgress(0)
     } finally {
       if (!aborted.current) setBusy(false)
+      if (/做一个对外(?:链接|连接)/.test(text)) setExternalShareAnnouncementPending(false)
     }
   }
 
   const send = async (text: string, mode?: 'fast' | 'deep') => {
     setDraft('')
+    if (/报错\s*web/i.test(text)) setWebDeploymentErrorNonce(current => current + 1)
     const matched = state.skills.find(s => text.includes(s.name))
     const version = ++streamVersion.current
     const aborted = { current: false }
@@ -370,6 +374,7 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
   const startInternetShare = () => {
     const prompt = '做一个对外连接'
     setExternalShareRequested(true)
+    setExternalShareAnnouncementPending(true)
     setExternalShareStatus('idle')
     setDraft(prompt)
     window.setTimeout(() => send(prompt), 0)
@@ -386,12 +391,6 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
       toast('分享链接已生成')
     }, 3600)
   }
-
-  useEffect(() => {
-    if (!externalSyncWaiting || busy) return
-    setExternalSyncWaiting(false)
-    startExternalLinkGeneration()
-  }, [externalSyncWaiting, busy])
 
   const handleExternalShareAction = async () => {
     if (externalShareStatus === 'idle') {
@@ -584,13 +583,10 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
               externalShareStatus={externalShareStatus}
               externalShareRequested={externalShareRequested}
               externalAgentGenerating={busy && externalShareRequested}
+              externalAnnouncementPending={externalShareAnnouncementPending}
               onExternalShareAction={handleExternalShareAction}
-              onExternalShareSync={() => {
-                if (busy) return
-                setExternalShareStatus('approved')
-                setExternalSyncWaiting(true)
-                send('同步对外链接')
-              }}
+              webDeploymentErrorNonce={webDeploymentErrorNonce}
+              webAppScopeKey={taskId || undefined}
             />
           </div>
         )}
