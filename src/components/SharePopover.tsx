@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { Icon } from './Icon'
 
 type MemberPerm = 'read' | 'fork'
+export type VisibilityScope = 'partial' | 'company' | 'internet'
+export type WebDeploymentStatus = 'missing' | 'approval' | 'reviewing' | 'approved' | 'deploying' | 'deployed' | 'error'
 
 interface ShareMember {
   id: string
@@ -28,14 +30,23 @@ interface SharePopoverProps {
   copyLabel?: string
   onCopy?: (url: string) => void
   onInternetShare?: (url: string) => void
-  deploymentStatus?: 'outdated' | 'building' | 'packing' | 'deploying' | 'deployed'
+  deploymentStatus?: WebDeploymentStatus
+  deploymentError?: string
+  deploymentTarget?: '企业内链接' | '互联网链接'
+  deploymentVersion?: number
   onSyncDeployment?: () => void
-  onSyncExternalShare?: () => void
+  onSubmitDeploymentApproval?: (reason: string) => void
+  onGenerateDeployment?: () => void
   externalShareStatus?: 'idle' | 'applying' | 'approved' | 'generating' | 'generated'
   externalShareRequested?: boolean
   externalAgentGenerating?: boolean
   externalOnlineOutdated?: boolean
   onExternalShareAction?: () => void
+  managedWebAppDeployment?: boolean
+  controlledVisibilityScope?: VisibilityScope
+  onVisibilityScopeChange?: (scope: VisibilityScope) => void
+  internetPreparationDone?: boolean
+  onInternetPreparationConfirmed?: () => void
 }
 
 const MAKE_MEMBERS = (): ShareMember[] => [
@@ -91,13 +102,22 @@ export function SharePopover({
   onCopy,
   onInternetShare,
   deploymentStatus,
+  deploymentError = 'WebApp 部署失败，请检查构建配置后重新部署。',
+  deploymentTarget = '企业内链接',
+  deploymentVersion = 1,
   onSyncDeployment,
-  onSyncExternalShare,
+  onSubmitDeploymentApproval,
+  onGenerateDeployment,
   externalShareStatus,
   externalShareRequested = false,
   externalAgentGenerating = false,
   externalOnlineOutdated = false,
   onExternalShareAction,
+  managedWebAppDeployment = false,
+  controlledVisibilityScope,
+  onVisibilityScopeChange,
+  internetPreparationDone = false,
+  onInternetPreparationConfirmed,
 }: SharePopoverProps) {
   const [internetConfirmOpen, setInternetConfirmOpen] = useState(false)
   const [internetAcknowledged, setInternetAcknowledged] = useState(false)
@@ -119,14 +139,16 @@ export function SharePopover({
   const [managePermOpenId, setManagePermOpenId] = useState<string | null>(null)
   const [localToast, setLocalToast] = useState('')
   const localToastTimerRef = useRef<number | null>(null)
-  type VisibilityScope = 'partial' | 'company' | 'internet'
   const [visibilityScope, setVisibilityScope] = useState<VisibilityScope>('partial')
   const [visibilityMenuOpen, setVisibilityMenuOpen] = useState(false)
   const [externalApprovalOpen, setExternalApprovalOpen] = useState(false)
   const [externalApprovalReason, setExternalApprovalReason] = useState('')
-  const [externalGenerationStep, setExternalGenerationStep] = useState(0)
-  const [externalGenerationTriggered, setExternalGenerationTriggered] = useState(false)
+  const [deploymentErrorOpen, setDeploymentErrorOpen] = useState(false)
   const previousVisibilityScopeRef = useRef<VisibilityScope>('partial')
+
+  useEffect(() => {
+    if (controlledVisibilityScope) setVisibilityScope(controlledVisibilityScope)
+  }, [controlledVisibilityScope])
 
   useEffect(() => {
     if (externalShareRequested) setVisibilityScope('internet')
@@ -174,13 +196,20 @@ export function SharePopover({
   }, [open])
 
   const handleLinkAction = () => {
+    if (managedWebAppDeployment) {
+      if (shareUrl) copyLink()
+      return
+    }
     const useExternalShareFlow = externalShareRequested && visibilityScope === 'internet'
+    if (useExternalShareFlow && externalShareStatus === 'generating') {
+      copyLink()
+      return
+    }
     if (useExternalShareFlow && externalShareStatus === 'idle') {
       setExternalApprovalOpen(true)
       return
     }
     if (useExternalShareFlow && externalShareStatus !== 'generated') {
-      if (externalShareStatus === 'approved') setExternalGenerationTriggered(true)
       onExternalShareAction?.()
       return
     }
@@ -188,6 +217,12 @@ export function SharePopover({
   }
 
   const submitExternalApproval = () => {
+    if (managedWebAppDeployment) {
+      setExternalApprovalOpen(false)
+      onSubmitDeploymentApproval?.(externalApprovalReason)
+      setExternalApprovalReason('')
+      return
+    }
     setExternalApprovalOpen(false)
     onExternalShareAction?.()
   }
@@ -347,33 +382,6 @@ export function SharePopover({
     setVisibilityScope(previousVisibilityScopeRef.current)
   }
 
-  useEffect(() => {
-    const outdated = deploymentStatus === 'outdated'
-    const manualOnlineSync = outdated
-      && externalShareRequested
-      && visibilityScope === 'internet'
-    if (!outdated || manualOnlineSync) return
-    onSyncDeployment?.()
-  }, [deploymentStatus, externalShareRequested, visibilityScope, externalShareStatus, onSyncDeployment])
-
-  useEffect(() => {
-    if (externalShareStatus !== 'generating' && !externalGenerationTriggered) {
-      setExternalGenerationStep(0)
-      return
-    }
-    setExternalGenerationStep(0)
-    const packingTimer = window.setTimeout(() => setExternalGenerationStep(1), 1200)
-    const deployingTimer = window.setTimeout(() => setExternalGenerationStep(2), 2400)
-    return () => {
-      window.clearTimeout(packingTimer)
-      window.clearTimeout(deployingTimer)
-    }
-  }, [externalShareStatus, externalGenerationTriggered])
-
-  useEffect(() => {
-    if (externalShareStatus === 'generated' || !externalShareRequested) setExternalGenerationTriggered(false)
-  }, [externalShareStatus, externalShareRequested])
-
   if (!mounted && !open) return null
 
   const renderInvitePicker = () => (
@@ -517,10 +525,10 @@ export function SharePopover({
           </>
         ) : (
           <>
-            <h4 className="sh-internet-confirm-title">确认分享到互联网</h4>
+            <h4 className="sh-internet-confirm-title">确认切换为互联网可见</h4>
             <div className="sh-internet-notice">
               <p>1. 数据将会发布到公网，请自行把控数据安全。</p>
-              <p>2. 点击确认后，Agent 将自动开始生成分享页面，请耐心等待 2～3 分钟，期间会占用会话。</p>
+              <p>2. 确认后 Agent 会自动发送对外分享消息，消息完成后进入互联网分享审核。</p>
             </div>
 
             <label className="sh-internet-ack">
@@ -539,11 +547,16 @@ export function SharePopover({
               onClick={() => {
                 if (!internetAcknowledged) return
                 setInternetGenerating(true)
+                if (managedWebAppDeployment) {
+                  setVisibilityScope('internet')
+                  onVisibilityScopeChange?.('internet')
+                  onInternetPreparationConfirmed?.()
+                }
                 onClose()
                 onInternetShare?.(shareUrl)
               }}
             >
-              开始生成
+              {managedWebAppDeployment ? '确认并继续' : '开始生成'}
             </button>
           </>
         )}
@@ -551,23 +564,22 @@ export function SharePopover({
     </div>
   )
 
-  const webAppOutdated = deploymentStatus === 'outdated'
-  const webAppDeploying = Boolean(deploymentStatus && deploymentStatus !== 'outdated' && deploymentStatus !== 'deployed')
+  const webAppDeploymentError = deploymentStatus === 'error'
   const internetExternalShareActive = externalShareRequested && visibilityScope === 'internet'
   const externalLinkMaking = internetExternalShareActive && externalShareStatus !== 'generated'
-  const externalLinkGenerating = internetExternalShareActive && (externalShareStatus === 'generating' || externalGenerationTriggered)
-  const showDeploymentAnimation = webAppDeploying || externalLinkGenerating
-  const requiresManualOnlineSync = internetExternalShareActive
-    && externalShareStatus === 'generated'
-    && (webAppOutdated || externalOnlineOutdated)
-  const deploymentSteps = [
-    { id: 'building', label: '构建' },
-    { id: 'packing', label: '打包' },
-    { id: 'deploying', label: '部署' },
-  ] as const
-  const activeDeploymentIndex = externalLinkGenerating
-    ? externalGenerationStep
-    : deploymentStatus === 'packing' ? 1 : deploymentStatus === 'deploying' ? 2 : 0
+  const cloudSyncState = webAppDeploymentError
+    ? 'error'
+    : deploymentStatus && deploymentStatus !== 'deployed' || externalLinkMaking || externalOnlineOutdated
+      ? 'syncing'
+      : 'synced'
+  const cloudSyncLabel = deploymentStatus === 'error'
+    ? '出错'
+    : !shareUrl
+      ? '无链接'
+      : deploymentStatus === 'deployed'
+      ? '已同步'
+      : '版本落后'
+  const syncingWithoutBlocker = deploymentStatus === 'missing' || deploymentStatus === 'deploying'
 
   const renderShareView = () => (
     <>
@@ -623,9 +635,18 @@ export function SharePopover({
                   aria-selected={visibilityScope === value}
                   key={value}
                   onClick={() => {
+                    if (managedWebAppDeployment && value === 'internet' && visibilityScope !== 'internet' && !internetPreparationDone) {
+                      previousVisibilityScopeRef.current = visibilityScope
+                      setVisibilityMenuOpen(false)
+                      setInternetConfirmOpen(true)
+                      setInternetAcknowledged(false)
+                      setInternetGenerating(false)
+                      return
+                    }
                     setVisibilityScope(value)
+                    onVisibilityScopeChange?.(value)
                     setVisibilityMenuOpen(false)
-                    if (value === 'internet' && !externalShareRequested) {
+                    if (!managedWebAppDeployment && value === 'internet' && !externalShareRequested) {
                       previousVisibilityScopeRef.current = visibilityScope
                       setInternetConfirmOpen(true)
                       setInternetAcknowledged(false)
@@ -657,40 +678,13 @@ export function SharePopover({
         </button>}
         </div>
 
-        {requiresManualOnlineSync && (
-          <div className="sh-sync-notice sh-sync-notice-bottom" role="status">
-            <span className="sh-sync-notice-icon"><Icon name="warning-circle" cls="ic" /></span>
-            <div><strong>本应用有修改，是否同步到线上链接？</strong></div>
-            <button type="button" onClick={onSyncExternalShare || onSyncDeployment}>同步</button>
-          </div>
-        )}
-
         <div className="sh-foot sh-copy-foot sh-link-action-row">
-          {showDeploymentAnimation ? (
-          <div className="sh-deployment-card sh-deployment-card-bottom" role="status" aria-live="polite" aria-label={`正在${deploymentSteps[activeDeploymentIndex].label}`}>
-            <div className="sh-deployment-heading">
-              <strong>分享链接生成中</strong>
-            </div>
-            <div className="sh-deployment-steps">
-              {deploymentSteps.map((step, index) => {
-                const completed = index < activeDeploymentIndex
-                const active = index === activeDeploymentIndex
-                return (
-                  <div className={'sh-deployment-step' + (completed ? ' completed' : '') + (active ? ' active' : '')} key={step.id}>
-                    <span className="sh-deployment-node" aria-hidden="true">
-                      {completed ? <Icon name="check" cls="ic" /> : active ? <span className="sh-deployment-spinner" /> : index + 1}
-                    </span>
-                    <strong>{step.label}</strong>
-                    {index < deploymentSteps.length - 1 && <span className="sh-deployment-line" />}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-          ) : externalLinkMaking ? (
+          {managedWebAppDeployment && !shareUrl ? (
+            <div className="sh-link-box sh-link-box-empty"><span className="sh-link-text">尚未生成链接</span></div>
+          ) : externalLinkMaking && !shareUrl ? (
             <div className="sh-external-making-status sh-external-making-status-inline">
               {(externalAgentGenerating || externalShareStatus === 'generating') && <span className="sh-internet-spinner" aria-hidden="true" />}
-              <span>{externalAgentGenerating ? '网页正在制作中' : externalShareStatus === 'approved' ? webAppOutdated ? '对外链接待生成' : '对外连接审核已通过' : externalShareStatus === 'generating' ? '对外连接生成中' : '对外连接生成需要审核'}</span>
+              <span>{externalAgentGenerating ? '网页正在制作中' : externalShareStatus === 'approved' ? '对外链接待生成' : externalShareStatus === 'generating' ? '对外连接生成中' : '对外连接生成需要审核'}</span>
             </div>
           ) : (
             <div className="sh-link-box"><span className="sh-link-text">{shareUrl}</span></div>
@@ -699,12 +693,45 @@ export function SharePopover({
             type="button"
             className="sh-copy-btn"
             onClick={handleLinkAction}
-            disabled={webAppDeploying || (internetExternalShareActive && (externalAgentGenerating || externalShareStatus === 'applying' || externalLinkGenerating))}
+            disabled={(managedWebAppDeployment && !shareUrl) || (!managedWebAppDeployment && internetExternalShareActive && (externalAgentGenerating || externalShareStatus === 'applying'))}
           >
-            <Icon name={internetExternalShareActive && externalShareStatus === 'idle' ? 'export' : internetExternalShareActive && externalShareStatus !== 'generated' ? 'link' : copied ? 'check' : 'copy'} cls="ic sh-copy-ic" />
-            <span>{internetExternalShareActive ? externalShareStatus === 'idle' ? '去审核' : externalShareStatus === 'applying' ? '审核中' : externalLinkGenerating ? '生成中' : externalShareStatus === 'approved' ? '生成链接' : copied ? '已复制' : '复制链接' : copied ? '已复制' : copyLabel}</span>
+            <Icon name={managedWebAppDeployment ? copied ? 'check' : 'copy' : internetExternalShareActive && externalShareStatus === 'idle' ? 'export' : internetExternalShareActive && externalShareStatus === 'approved' ? 'link' : copied ? 'check' : 'copy'} cls="ic sh-copy-ic" />
+            <span>{managedWebAppDeployment ? copied ? '已复制' : '复制链接' : internetExternalShareActive ? externalShareStatus === 'idle' ? '去审核' : externalShareStatus === 'applying' ? '审核中' : externalShareStatus === 'approved' ? '生成链接' : copied ? '已复制' : '复制链接' : copied ? '已复制' : copyLabel}</span>
           </button>
         </div>
+        {deploymentStatus && (
+          <div className="sh-cloud-sync-row">
+            <span
+              className={`sh-cloud-sync-badge is-${cloudSyncState}`}
+              role="status"
+              aria-label={cloudSyncLabel}
+            >
+              <Icon name="link" cls="ic sh-cloud-sync-link-icon" />
+              <span>{cloudSyncLabel}</span>
+            </span>
+            {deploymentStatus === 'error' && (
+              <button type="button" className="sh-cloud-sync-action is-error-action" onClick={() => setDeploymentErrorOpen(true)}>查看信息</button>
+            )}
+            {syncingWithoutBlocker && (
+              <span className="sh-cloud-sync-action is-static is-progress"><span className="sh-cloud-sync-spinner" aria-hidden="true" />{shareUrl ? '正在同步版本' : '正在生成链接'}</span>
+            )}
+            {deploymentStatus === 'approval' && (
+              <>
+                <span className="sh-cloud-sync-action is-static is-blocked">「互联网可见」链接的创建与更新需审核</span>
+                <button type="button" className="sh-cloud-sync-apply" onClick={() => setExternalApprovalOpen(true)}>点击申请</button>
+              </>
+            )}
+            {deploymentStatus === 'reviewing' && (
+              <span className="sh-cloud-sync-action is-static is-progress"><span className="sh-cloud-sync-spinner" aria-hidden="true" />对外链接审核中</span>
+            )}
+            {deploymentStatus === 'approved' && (
+              <>
+                <span className="sh-cloud-sync-action is-static is-approved">审核已通过</span>
+                <button type="button" className="sh-cloud-sync-generate" onClick={onGenerateDeployment}>{shareUrl ? '同步版本' : '生成链接'}</button>
+              </>
+            )}
+          </div>
+        )}
         </>
       )}
     </>
@@ -712,6 +739,29 @@ export function SharePopover({
 
   const content = (
     <>
+    {deploymentErrorOpen && createPortal(
+      <div className="sh-deployment-error-mask" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDeploymentErrorOpen(false) }}>
+        <section className="sh-deployment-error-dialog" role="dialog" aria-modal="true" aria-labelledby="sh-deployment-error-title">
+          <header>
+            <div>
+              <span className="sh-deployment-error-icon"><Icon name="warning-circle" cls="ic" /></span>
+              <h3 id="sh-deployment-error-title">部署失败</h3>
+            </div>
+            <button type="button" onClick={() => setDeploymentErrorOpen(false)} aria-label="关闭"><Icon name="x" cls="ic" /></button>
+          </header>
+          <dl className="sh-deployment-error-meta">
+            <div><dt>发布目标</dt><dd>{deploymentTarget}</dd></div>
+            <div><dt>目标版本</dt><dd>V{deploymentVersion}</dd></div>
+          </dl>
+          <pre>{deploymentError}</pre>
+          <footer>
+            <button type="button" className="cancel" onClick={() => setDeploymentErrorOpen(false)}>取消</button>
+            <button type="button" className="retry" onClick={() => { setDeploymentErrorOpen(false); onSyncDeployment?.() }}>{deploymentTarget === '互联网链接' ? '重新提交审核' : '重新部署'}</button>
+          </footer>
+        </section>
+      </div>,
+      document.body,
+    )}
     <div
       className={'sh-popover-wrap sh-popover-wrap-portal' + (open ? '' : ' sh-closing')}
       ref={wrapRef}
@@ -748,6 +798,7 @@ export function SharePopover({
           <div className="sh-external-approval-content">
             <dl>
               <div><dt>申请应用</dt><dd>{title.replace(/^分享/, '') || '当前 WebApp'}</dd></div>
+              {managedWebAppDeployment && <div><dt>申请版本</dt><dd>V{deploymentVersion}</dd></div>}
               <div><dt>可访问范围</dt><dd><span className="sh-external-approval-badge">互联网可见</span></dd></div>
               <div><dt>审批人</dt><dd>你的直属负责人（+1）</dd></div>
             </dl>
