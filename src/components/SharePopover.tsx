@@ -30,9 +30,11 @@ interface SharePopoverProps {
   onInternetShare?: (url: string) => void
   deploymentStatus?: 'outdated' | 'building' | 'packing' | 'deploying' | 'deployed'
   onSyncDeployment?: () => void
+  onSyncExternalShare?: () => void
   externalShareStatus?: 'idle' | 'applying' | 'approved' | 'generating' | 'generated'
   externalShareRequested?: boolean
   externalAgentGenerating?: boolean
+  externalOnlineOutdated?: boolean
   onExternalShareAction?: () => void
 }
 
@@ -90,9 +92,11 @@ export function SharePopover({
   onInternetShare,
   deploymentStatus,
   onSyncDeployment,
+  onSyncExternalShare,
   externalShareStatus,
   externalShareRequested = false,
   externalAgentGenerating = false,
+  externalOnlineOutdated = false,
   onExternalShareAction,
 }: SharePopoverProps) {
   const [internetConfirmOpen, setInternetConfirmOpen] = useState(false)
@@ -121,6 +125,7 @@ export function SharePopover({
   const [externalApprovalOpen, setExternalApprovalOpen] = useState(false)
   const [externalApprovalReason, setExternalApprovalReason] = useState('')
   const [externalGenerationStep, setExternalGenerationStep] = useState(0)
+  const [externalGenerationTriggered, setExternalGenerationTriggered] = useState(false)
   const previousVisibilityScopeRef = useRef<VisibilityScope>('partial')
 
   useEffect(() => {
@@ -175,6 +180,7 @@ export function SharePopover({
       return
     }
     if (useExternalShareFlow && externalShareStatus !== 'generated') {
+      if (externalShareStatus === 'approved') setExternalGenerationTriggered(true)
       onExternalShareAction?.()
       return
     }
@@ -346,13 +352,12 @@ export function SharePopover({
     const manualOnlineSync = outdated
       && externalShareRequested
       && visibilityScope === 'internet'
-      && externalShareStatus === 'generated'
     if (!outdated || manualOnlineSync) return
     onSyncDeployment?.()
   }, [deploymentStatus, externalShareRequested, visibilityScope, externalShareStatus, onSyncDeployment])
 
   useEffect(() => {
-    if (externalShareStatus !== 'generating') {
+    if (externalShareStatus !== 'generating' && !externalGenerationTriggered) {
       setExternalGenerationStep(0)
       return
     }
@@ -363,7 +368,11 @@ export function SharePopover({
       window.clearTimeout(packingTimer)
       window.clearTimeout(deployingTimer)
     }
-  }, [externalShareStatus])
+  }, [externalShareStatus, externalGenerationTriggered])
+
+  useEffect(() => {
+    if (externalShareStatus === 'generated' || !externalShareRequested) setExternalGenerationTriggered(false)
+  }, [externalShareStatus, externalShareRequested])
 
   if (!mounted && !open) return null
 
@@ -546,9 +555,11 @@ export function SharePopover({
   const webAppDeploying = Boolean(deploymentStatus && deploymentStatus !== 'outdated' && deploymentStatus !== 'deployed')
   const internetExternalShareActive = externalShareRequested && visibilityScope === 'internet'
   const externalLinkMaking = internetExternalShareActive && externalShareStatus !== 'generated'
-  const externalLinkGenerating = internetExternalShareActive && externalShareStatus === 'generating'
+  const externalLinkGenerating = internetExternalShareActive && (externalShareStatus === 'generating' || externalGenerationTriggered)
   const showDeploymentAnimation = webAppDeploying || externalLinkGenerating
-  const requiresManualOnlineSync = webAppOutdated && internetExternalShareActive && externalShareStatus === 'generated'
+  const requiresManualOnlineSync = internetExternalShareActive
+    && externalShareStatus === 'generated'
+    && (webAppOutdated || externalOnlineOutdated)
   const deploymentSteps = [
     { id: 'building', label: '构建' },
     { id: 'packing', label: '打包' },
@@ -650,7 +661,7 @@ export function SharePopover({
           <div className="sh-sync-notice sh-sync-notice-bottom" role="status">
             <span className="sh-sync-notice-icon"><Icon name="warning-circle" cls="ic" /></span>
             <div><strong>本应用有修改，是否同步到线上链接？</strong></div>
-            <button type="button" onClick={onSyncDeployment}>同步</button>
+            <button type="button" onClick={onSyncExternalShare || onSyncDeployment}>同步</button>
           </div>
         )}
 
@@ -679,7 +690,7 @@ export function SharePopover({
           ) : externalLinkMaking ? (
             <div className="sh-external-making-status sh-external-making-status-inline">
               {(externalAgentGenerating || externalShareStatus === 'generating') && <span className="sh-internet-spinner" aria-hidden="true" />}
-              <span>{externalAgentGenerating ? '网页正在制作中' : externalShareStatus === 'approved' ? '对外连接审核已通过' : externalShareStatus === 'generating' ? '对外连接生成中' : '对外连接生成需要审核'}</span>
+              <span>{externalAgentGenerating ? '网页正在制作中' : externalShareStatus === 'approved' ? webAppOutdated ? '对外链接待生成' : '对外连接审核已通过' : externalShareStatus === 'generating' ? '对外连接生成中' : '对外连接生成需要审核'}</span>
             </div>
           ) : (
             <div className="sh-link-box"><span className="sh-link-text">{shareUrl}</span></div>
@@ -688,10 +699,10 @@ export function SharePopover({
             type="button"
             className="sh-copy-btn"
             onClick={handleLinkAction}
-            disabled={webAppDeploying || (internetExternalShareActive && (externalAgentGenerating || externalShareStatus === 'applying' || externalShareStatus === 'generating'))}
+            disabled={webAppDeploying || (internetExternalShareActive && (externalAgentGenerating || externalShareStatus === 'applying' || externalLinkGenerating))}
           >
             <Icon name={internetExternalShareActive && externalShareStatus === 'idle' ? 'export' : internetExternalShareActive && externalShareStatus !== 'generated' ? 'link' : copied ? 'check' : 'copy'} cls="ic sh-copy-ic" />
-            <span>{internetExternalShareActive ? externalShareStatus === 'idle' ? '去审核' : externalShareStatus === 'applying' ? '审核中' : externalShareStatus === 'approved' ? '生成链接' : externalShareStatus === 'generating' ? '生成中' : copied ? '已复制' : '复制链接' : copied ? '已复制' : copyLabel}</span>
+            <span>{internetExternalShareActive ? externalShareStatus === 'idle' ? '去审核' : externalShareStatus === 'applying' ? '审核中' : externalLinkGenerating ? '生成中' : externalShareStatus === 'approved' ? '生成链接' : copied ? '已复制' : '复制链接' : copied ? '已复制' : copyLabel}</span>
           </button>
         </div>
         </>
