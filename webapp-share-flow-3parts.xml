@@ -4,7 +4,7 @@
 <whiteboard type="mermaid">
 flowchart LR
   A[1. 切换到企业内或部分人可见] --> B[2. 自动生成链接或同步版本]
-  B --> C[3. 部署成功后更新链接并显示已同步]
+  B --> C[3. 部署成功后更新链接并显示已发布]
 </whiteboard>
 
 <h2>节点 1｜切换到企业内或部分人可见</h2>
@@ -14,7 +14,7 @@ flowchart LR
 <img src="Wd0Jb1Pmao6tmLx90sVcSm0Mnsb" width="900" caption="无链接时自动生成，已有链接但版本落后时自动同步；动作区显示转圈。" name="15-internal-syncing.png"/>
 
 <h2>节点 3｜部署成功后更新链接</h2>
-<img src="Ow8vbHbttolGQlxVzPscLLvPn8b" width="900" caption="部署成功后才更新链接与复制内容，状态变为已同步。" name="16-internal-synced-latest.png"/>
+<img src="Ow8vbHbttolGQlxVzPscLLvPn8b" width="900" caption="部署成功后才更新链接与复制内容，状态变为已发布。" name="16-internal-synced-latest.png"/>
 
 <h1>Part 2｜互联网链接首次创建</h1>
 <whiteboard type="mermaid">
@@ -22,8 +22,8 @@ flowchart LR
   A[1. 首次切换并确认风险] --> B[2. 完成对外准备并提示审核]
   B --> C[3. 提交审核]
   C --> D[4. 审核通过后生成链接]
-  D --> E[5. 正在生成链接]
-  E --> F[6. 生成成功并已同步]
+  D --> E[5. 正在发布中]
+  E --> F[6. 生成成功并已发布]
 </whiteboard>
 
 <h2>节点 1｜首次切换并确认风险</h2>
@@ -38,11 +38,11 @@ flowchart LR
 <h2>节点 4｜审核通过后生成链接</h2>
 <img src="WE0ibTvRCoJz09xU4pTcR4pmnPd" width="900" caption="审核通过后显示“审核已通过”，首次创建的主动作是“生成链接”。" name="05-approved-generate.png"/>
 
-<h2>节点 5｜正在生成链接</h2>
-<img src="OKVJbYfmNoe43GxMep3cSK2Tnnc" width="900" caption="生成期间状态仍为无链接，动作区显示转圈和正在生成链接。" name="06-generating-public-link.png"/>
+<h2>节点 5｜正在发布中</h2>
+<img src="OKVJbYfmNoe43GxMep3cSK2Tnnc" width="900" caption="发布期间状态仍为无链接，动作区显示转圈和正在发布中。" name="06-generating-public-link.png"/>
 
-<h2>节点 6｜生成成功并已同步</h2>
-<img src="Bwsub09zeobGVYxZ8DPcqp6rnUf" width="900" caption="部署成功后写入互联网 URL、开放复制，并将状态更新为已同步。" name="07-public-synced.png"/>
+<h2>节点 6｜生成成功并已发布</h2>
+<img src="Bwsub09zeobGVYxZ8DPcqp6rnUf" width="900" caption="部署成功后写入互联网 URL、开放复制，并将状态更新为已发布。" name="07-public-synced.png"/>
 
 <h1>Part 3｜互联网链接版本更新</h1>
 <whiteboard type="mermaid">
@@ -51,7 +51,7 @@ flowchart LR
   B --> C[3. 提交更新审核]
   C --> D[4. 审核通过后同步版本]
   D --> E[5. 正在同步版本]
-  E --> F[6. 更新成功并已同步]
+  E --> F[6. 更新成功并已发布]
 </whiteboard>
 
 <h2>节点 1｜修改 WebApp</h2>
@@ -69,5 +69,5 @@ flowchart LR
 <h2>节点 5｜正在同步版本</h2>
 <img src="XVuIbRwKpoBSDIxqnbccQLlLn4b" width="900" caption="同步期间继续保留原链接，动作区显示转圈和正在同步版本。" name="12-syncing-public-version.png"/>
 
-<h2>节点 6｜更新成功并已同步</h2>
-<img src="YQm0b2JDNoqKa0xjj0PcZd9Inkd" width="900" caption="部署成功后，原 URL 内容升级到最新 WebApp 版本，状态恢复已同步。" name="13-public-update-synced.png"/>
+<h2>节点 6｜更新成功并已发布</h2>
+<img src="YQm0b2JDNoqKa0xjj0PcZd9Inkd" width="900" caption="部署成功后，原 URL 内容升级到最新 WebApp 版本，状态恢复已发布。" name="13-public-update-synced.png"/>

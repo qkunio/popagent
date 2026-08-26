@@ -577,7 +577,7 @@ export function SharePopover({
     : !shareUrl
       ? '无链接'
       : deploymentStatus === 'deployed'
-      ? '已同步'
+      ? '已发布'
       : '版本落后'
   const syncingWithoutBlocker = deploymentStatus === 'missing' || deploymentStatus === 'deploying'
 
@@ -684,7 +684,7 @@ export function SharePopover({
           ) : externalLinkMaking && !shareUrl ? (
             <div className="sh-external-making-status sh-external-making-status-inline">
               {(externalAgentGenerating || externalShareStatus === 'generating') && <span className="sh-internet-spinner" aria-hidden="true" />}
-              <span>{externalAgentGenerating ? '网页正在制作中' : externalShareStatus === 'approved' ? '对外链接待生成' : externalShareStatus === 'generating' ? '对外连接生成中' : '对外连接生成需要审核'}</span>
+              <span>{externalAgentGenerating ? '网页正在制作中' : externalShareStatus === 'approved' ? '对外链接待生成' : externalShareStatus === 'generating' ? '正在发布中' : '对外连接生成需要审核'}</span>
             </div>
           ) : (
             <div className="sh-link-box"><span className="sh-link-text">{shareUrl}</span></div>
@@ -713,7 +713,7 @@ export function SharePopover({
               <button type="button" className="sh-cloud-sync-action is-error-action" onClick={() => setDeploymentErrorOpen(true)}>查看信息</button>
             )}
             {syncingWithoutBlocker && (
-              <span className="sh-cloud-sync-action is-static is-progress"><span className="sh-cloud-sync-spinner" aria-hidden="true" />{shareUrl ? '正在同步版本' : '正在生成链接'}</span>
+              <span className="sh-cloud-sync-action is-static is-progress"><span className="sh-cloud-sync-spinner" aria-hidden="true" />{shareUrl ? '正在同步版本' : '正在发布中'}</span>
             )}
             {deploymentStatus === 'approval' && (
               <>
