@@ -11,6 +11,8 @@ import { SkillLibraryView } from './views/SkillLibraryView'
 import { AppsView } from './views/AppsView'
 import { DataOverviewView } from './views/DataOverviewView'
 import { SharePopover } from './components/SharePopover'
+import { ConversationShareView } from './views/ConversationShareView'
+import { getConversationShareUrl } from './conversationShare'
 import type { Prefs } from './api'
 
 export type ViewName = 'home' | 'task' | 'skills' | 'apps' | 'data'
@@ -29,6 +31,7 @@ export interface AppState {
 }
 
 export default function App() {
+  if (window.location.hash === '#/share/conversation') return <ConversationShareView />
   return (
     <ToastProvider>
       <DialogProvider>
@@ -227,7 +230,7 @@ function Shell() {
           onClose={() => setSidebarShareTask(null)}
           anchorRef={sidebarActionAnchorRef}
           title="分享对话"
-          shareUrl={sidebarShareTask ? `https://popagent.example.com/share/${sidebarShareTask.id}` : undefined}
+          shareUrl={sidebarShareTask ? getConversationShareUrl() : undefined}
         />
 
         <div className="railfoot">

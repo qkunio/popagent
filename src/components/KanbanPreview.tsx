@@ -587,6 +587,8 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   const [skillPublishName, setSkillPublishName] = useState('')
   const [skillPublishDescription, setSkillPublishDescription] = useState('')
   const [skillPublishSuccess, setSkillPublishSuccess] = useState(false)
+  const [skillPublishTarget, setSkillPublishTarget] = useState<'mine' | 'space'>('mine')
+  const [skillPublishTargetOpen, setSkillPublishTargetOpen] = useState(false)
   const [agentPublishOpen, setAgentPublishOpen] = useState(false)
   const [agentPublishSuccess, setAgentPublishSuccess] = useState(false)
   const [skillAppDirty, setSkillAppDirty] = useState(false)
@@ -746,6 +748,8 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     setSkillPublishName(data.name)
     setSkillPublishDescription(data.description)
     setSkillPublishSuccess(false)
+    setSkillPublishTarget('mine')
+    setSkillPublishTargetOpen(false)
     setSkillPublishOpen(true)
   }
 
@@ -766,7 +770,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
       description: skillPublishDescription.trim(),
       files: skillFiles,
       folders: skillFolders,
-    })
+    }, skillPublishTarget)
     setSkillPublishName(saved.name)
     setSkillPublishSuccess(true)
   }
@@ -1010,7 +1014,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
         <div className="skill-publish-success">
           <span className="skill-publish-success-icon"><Icon name="check" cls="ic" /></span>
           <h2 id="skill-publish-title">发布成功</h2>
-          <p>Skill 已发布为官方技能</p>
+          <p>Skill 已发布到「{skillPublishTarget === 'mine' ? '我的' : '空间'}」技能库</p>
           <div className="skill-publish-success-actions">
             <button type="button" className="cancel" onClick={() => setSkillPublishOpen(false)}>关闭</button>
           </div>
@@ -1020,7 +1024,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
           <header>
             <div>
               <span className="skill-publish-icon"><Icon name="lightning" cls="ic" /></span>
-              <div><h2 id="skill-publish-title">发布 Skill</h2><p>创建后已自动保存到“我的”，发布后将成为官方技能</p></div>
+              <div><h2 id="skill-publish-title">发布 Skill</h2><p>选择 Skill 的发布位置</p></div>
             </div>
             <button type="button" className="skill-publish-close" onClick={() => setSkillPublishOpen(false)} aria-label="关闭"><Icon name="x" cls="ic" /></button>
           </header>
@@ -1032,6 +1036,25 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
             <div>
               <span>描述</span>
               <p>{skillPublishDescription}</p>
+            </div>
+            <div className="skill-publish-target-row">
+              <span>发布到</span>
+              <div className="skill-publish-target-picker">
+                <button type="button" className="skill-publish-target-trigger" aria-haspopup="listbox" aria-expanded={skillPublishTargetOpen} onClick={() => setSkillPublishTargetOpen(open => !open)}>
+                  <strong>发布到「{skillPublishTarget === 'mine' ? '我的' : '空间'}」技能库</strong>
+                  <Icon name="caret-down" cls="ic" />
+                </button>
+                {skillPublishTargetOpen && (
+                  <div className="skill-publish-target-menu" role="listbox" aria-label="选择发布位置">
+                    {([['mine', '发布到「我的」技能库'], ['space', '发布到「空间」技能库']] as const).map(([value, label]) => (
+                      <button type="button" role="option" aria-selected={skillPublishTarget === value} key={value} onClick={() => { setSkillPublishTarget(value); setSkillPublishTargetOpen(false) }}>
+                        <span>{label}</span>
+                        {skillPublishTarget === value && <Icon name="check" cls="ic" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <footer>

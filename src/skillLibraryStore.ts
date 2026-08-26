@@ -4,7 +4,7 @@ export interface LibrarySkill {
   id: string
   name: string
   description: string
-  owner: 'official' | 'mine'
+  owner: 'official' | 'mine' | 'space'
   installed?: boolean
   detail?: string
   files?: Array<{ path: string; content: string }>
@@ -39,7 +39,7 @@ const DEFAULT_SKILLS: LibrarySkill[] = [
 export function readSkillLibrary(): LibrarySkill[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return (JSON.parse(raw) as Array<Omit<LibrarySkill, 'owner'> & { owner: LibrarySkill['owner'] | 'space' }>).map(skill => ({ ...skill, owner: skill.owner === 'space' ? 'official' : skill.owner }))
+    if (raw) return JSON.parse(raw) as LibrarySkill[]
   } catch {}
   return DEFAULT_SKILLS.map(skill => ({ ...skill }))
 }
@@ -74,7 +74,7 @@ type SkillLibraryWriteInput = { name: string; description: string; files: Array<
 export function ensureCreatedSkillInLibrary(input: SkillLibraryWriteInput): LibrarySkill {
   const skills = readSkillLibrary()
   const existing = skills.find(skill => skill.name === input.name)
-  if (existing?.owner === 'official') return existing
+  if (existing?.owner === 'official' || existing?.owner === 'space') return existing
   const skill: LibrarySkill = {
     id: existing?.id || `published-skill-${Date.now()}`,
     name: input.name,
@@ -89,7 +89,7 @@ export function ensureCreatedSkillInLibrary(input: SkillLibraryWriteInput): Libr
   return skill
 }
 
-export function publishSkillToLibrary(input: SkillLibraryWriteInput): LibrarySkill {
+export function publishSkillToLibrary(input: SkillLibraryWriteInput, owner: 'mine' | 'space' = 'space'): LibrarySkill {
   const skills = readSkillLibrary()
   const existing = skills.find(skill => skill.name === input.name)
   const skill: LibrarySkill = {
@@ -99,7 +99,7 @@ export function publishSkillToLibrary(input: SkillLibraryWriteInput): LibrarySki
     detail: input.files.find(file => file.path === 'SKILL.md')?.content || input.description,
     files: input.files.map(file => ({ ...file })),
     folders: [...(input.folders || [])],
-    owner: 'official',
+    owner,
     installed: true,
   }
   writeSkillLibrary([skill, ...skills.filter(item => item.id !== skill.id)])

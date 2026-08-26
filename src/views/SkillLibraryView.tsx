@@ -3,7 +3,7 @@ import { Icon } from '../components/Icon'
 import { SkillDetailDialog } from '../components/SkillDetailDialog'
 import { addSkillToLibrary, deleteSkillFromLibrary, toggleLibrarySkillInstalled, useSkillLibrary, type LibrarySkill } from '../skillLibraryStore'
 
-type SkillFilter = 'all' | 'official' | 'mine'
+type SkillFilter = 'all' | 'official' | 'space' | 'mine'
 
 export function SkillLibraryView({ toast }: { toast: (message: string) => void }) {
   const skills = useSkillLibrary()
@@ -15,6 +15,7 @@ export function SkillLibraryView({ toast }: { toast: (message: string) => void }
   const counts = useMemo(() => ({
     all: skills.length,
     official: skills.filter(skill => skill.owner === 'official').length,
+    space: skills.filter(skill => skill.owner === 'space').length,
     mine: skills.filter(skill => skill.owner === 'mine').length,
   }), [skills])
 
@@ -53,6 +54,7 @@ export function SkillLibraryView({ toast }: { toast: (message: string) => void }
             {([
               ['all', '全部'],
               ['official', '官方'],
+              ['space', '空间'],
               ['mine', '我的'],
             ] as const).map(([value, label]) => (
               <button key={value} type="button" className={filter === value ? 'on' : ''} onClick={() => setFilter(value)}>
@@ -73,7 +75,7 @@ export function SkillLibraryView({ toast }: { toast: (message: string) => void }
                     </div>
                     <p>{skill.description}</p>
                     <footer>
-                      <span className="skill-owner"><Icon name="seal-check" cls="ic" />{skill.owner === 'official' ? '官方技能' : '我的技能'}</span>
+                      <span className="skill-owner"><Icon name="seal-check" cls="ic" />{{ official: '官方技能', space: '空间技能', mine: '我的技能' }[skill.owner]}</span>
                       <div className="skill-card-actions">
                         <button type="button" className={'skill-install' + (installed ? ' installed' : '')} onClick={event => { event.stopPropagation(); toggleInstall(skill) }}>
                           <Icon name={installed ? 'check' : 'plus'} cls="ic" />{installed ? '已添加' : '添加'}
