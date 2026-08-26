@@ -25,6 +25,7 @@ interface Props {
   externalShareRequested?: boolean
   externalAgentGenerating?: boolean
   onExternalShareAction?: () => void
+  onExternalShareSync?: () => void
 }
 
 type WorkspaceTabId = 'preview' | 'code' | 'config' | 'evolution' | 'service' | 'history'
@@ -564,7 +565,7 @@ function AgentTestPreview({
   )
 }
 
-export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, onClose, onInternetShare, externalShareStatus = 'idle', externalShareRequested = false, externalAgentGenerating = false, onExternalShareAction }: Props) {
+export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, onClose, onInternetShare, externalShareStatus = 'idle', externalShareRequested = false, externalAgentGenerating = false, onExternalShareAction, onExternalShareSync }: Props) {
   const toast = useToast()
   type WebApprovalStatus = 'idle' | 'reviewing' | 'approved'
   const [menuOpen, setMenuOpen] = useState(false)
@@ -575,6 +576,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   const [webLinkCopied, setWebLinkCopied] = useState(false)
   type WebDeployStatus = 'outdated' | 'building' | 'packing' | 'deploying' | 'deployed'
   const [webDeployByApp, setWebDeployByApp] = useState<Record<string, WebDeployStatus>>({})
+  const [webExternalOutdatedByApp, setWebExternalOutdatedByApp] = useState<Record<string, boolean>>({})
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [tabsByApp, setTabsByApp] = useState<Record<string, WorkspaceTabId[]>>({})
   const [activeTabByApp, setActiveTabByApp] = useState<Record<string, WorkspaceTabId | null>>({})
@@ -599,6 +601,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   const copyTimerRef = useRef<number | null>(null)
   const approvalTimerRef = useRef<number | null>(null)
   const webDeployTimersRef = useRef<number[]>([])
+  const webRevisionSeenRef = useRef<Record<string, number>>({})
   const skillPreviewRef = useRef<SkillAppPreviewHandle>(null)
 
   useEffect(() => {
@@ -709,6 +712,15 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
       webDeployTimersRef.current = []
     }
   }, [appKey, data?.type])
+
+  useEffect(() => {
+    if (data?.type !== 'webapp') return
+    const revision = data.revision || 0
+    const previousRevision = webRevisionSeenRef.current[appKey]
+    webRevisionSeenRef.current[appKey] = revision
+    if (revision <= 0 || previousRevision === revision || !externalShareRequested || externalShareStatus !== 'generated') return
+    setWebExternalOutdatedByApp(current => current[appKey] ? current : { ...current, [appKey]: true })
+  }, [appKey, data?.type, data?.type === 'webapp' ? data.revision : 0, externalShareRequested, externalShareStatus])
 
   const activateWorkspaceTab = (tabId: WorkspaceTabId) => {
     if (data?.type === 'skill' && skillAppDirty && activeWorkspaceTab === 'preview' && tabId !== 'preview') {
@@ -951,10 +963,21 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
         onInternetShare={onInternetShare ? () => onInternetShare() : undefined}
         deploymentStatus={data?.type === 'webapp' ? webDeploymentStatus : undefined}
         onSyncDeployment={data?.type === 'webapp' ? () => startWebDeployment(appKey) : undefined}
+        onSyncExternalShare={data?.type === 'webapp' ? () => {
+          setWebDeployByApp(current => ({ ...current, [appKey]: 'deployed' }))
+          setWebExternalOutdatedByApp(current => ({ ...current, [appKey]: false }))
+          onExternalShareSync?.()
+        } : undefined}
         externalShareStatus={(data?.type === 'sharepage' || data?.type === 'webapp') ? externalShareStatus : undefined}
         externalShareRequested={data?.type === 'webapp' && externalShareRequested}
         externalAgentGenerating={externalAgentGenerating}
-        onExternalShareAction={onExternalShareAction}
+        externalOnlineOutdated={data?.type === 'webapp' && Boolean(webExternalOutdatedByApp[appKey])}
+        onExternalShareAction={() => {
+          if (data?.type === 'webapp' && externalShareStatus === 'approved') {
+            setWebDeployByApp(current => ({ ...current, [appKey]: 'deployed' }))
+          }
+          onExternalShareAction?.()
+        }}
       />
     </div>
   )

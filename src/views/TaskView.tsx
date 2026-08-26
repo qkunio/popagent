@@ -44,6 +44,7 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
   const [permissionStatus, setPermissionStatus] = useState<'ready' | 'submitting' | 'approved'>('ready')
   const [externalShareStatus, setExternalShareStatus] = useState<ExternalShareStatus>('idle')
   const [externalShareRequested, setExternalShareRequested] = useState(false)
+  const [externalSyncWaiting, setExternalSyncWaiting] = useState(false)
   const laneRef = useRef<HTMLDivElement>(null)
   const toast = useToast()
 
@@ -135,6 +136,7 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
     setSelectedRoundIds([])
     setExternalShareStatus('idle')
     setExternalShareRequested(false)
+    setExternalSyncWaiting(false)
   }, [taskId])
 
   useEffect(() => {
@@ -374,6 +376,22 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
 
   const externalShareUrl = `https://popagent.example.com/webapp/${taskId || 'demo'}`
 
+  const startExternalLinkGeneration = () => {
+    if (externalShareTimerRef.current !== null) window.clearTimeout(externalShareTimerRef.current)
+    setExternalShareStatus('generating')
+    externalShareTimerRef.current = window.setTimeout(() => {
+      setExternalShareStatus('generated')
+      externalShareTimerRef.current = null
+      toast('分享链接已生成')
+    }, 3600)
+  }
+
+  useEffect(() => {
+    if (!externalSyncWaiting || busy) return
+    setExternalSyncWaiting(false)
+    startExternalLinkGeneration()
+  }, [externalSyncWaiting, busy])
+
   const handleExternalShareAction = async () => {
     if (externalShareStatus === 'idle') {
       setExternalShareStatus('applying')
@@ -385,12 +403,7 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
       return
     }
     if (externalShareStatus === 'approved') {
-      setExternalShareStatus('generating')
-      externalShareTimerRef.current = window.setTimeout(() => {
-        setExternalShareStatus('generated')
-        externalShareTimerRef.current = null
-        toast('分享链接已生成')
-      }, 3600)
+      startExternalLinkGeneration()
       return
     }
     if (externalShareStatus === 'generated' && externalShareUrl) {
@@ -575,6 +588,12 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
               externalShareRequested={externalShareRequested}
               externalAgentGenerating={busy && externalShareRequested}
               onExternalShareAction={handleExternalShareAction}
+              onExternalShareSync={() => {
+                if (busy) return
+                setExternalShareStatus('approved')
+                setExternalSyncWaiting(true)
+                send('同步对外链接')
+              }}
             />
           </div>
         )}
