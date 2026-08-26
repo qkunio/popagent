@@ -8,6 +8,7 @@ import { api, streamChat } from '../api'
 import type { AppState } from '../App'
 import type { AppPreview } from '../types'
 import { ensureCreatedSkillInLibrary } from '../skillLibraryStore'
+import { getConversationShareUrl } from '../conversationShare'
 
 export interface AppPreviewItem {
   id: string
@@ -446,11 +447,7 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
 
   const copyConversationShareLink = async () => {
     if (!taskId || selectedRoundIds.length === 0) return
-    const roundIndexes = shareRounds
-      .map((round, index) => selectedRoundIds.includes(round.id) ? index + 1 : null)
-      .filter((index): index is number => index !== null)
-      .join(',')
-    const link = `https://popagent.example.com/share/${taskId}?rounds=${roundIndexes}`
+    const link = getConversationShareUrl()
     try {
       await navigator.clipboard.writeText(link)
       toast('分享链接已复制')
