@@ -4984,7 +4984,7 @@ html[data-theme="dark"] .sh-sync-notice button { border-color: #85672C; backgrou
 .sh-cloud-sync-apply:hover { border-color: #33353B; background: #33353B; }
 .sh-cloud-sync-generate { height: 30px; padding: 0 12px; border: 1px solid #1F2329; border-radius: 7px; background: #1F2329; color: #FFFFFF; font: inherit; font-size: 13px; line-height: 28px; font-weight: 650; cursor: pointer; }
 .sh-cloud-sync-generate:hover { border-color: #33353B; background: #33353B; }
-.sh-cloud-sync-action.is-error-action { margin-left: -2px; padding-left: 9px; border-left: 1px solid #D9DCE1; color: #C9363E; }
+.sh-cloud-sync-action.is-error-action { margin-left: -2px; padding-left: 3px; color: #C9363E; }
 .sh-cloud-sync-action.is-error-action:hover { color: #A8242C; }
 html[data-theme="dark"] .sh-cloud-sync-badge.is-synced { background: #173728; color: #72D49E; }
 html[data-theme="dark"] .sh-cloud-sync-badge.is-syncing { background: #3A2E14; color: #F0C466; }
@@ -4998,7 +4998,7 @@ html[data-theme="dark"] .sh-cloud-sync-action.is-blocked { color: #F3F4F6; }
 html[data-theme="dark"] .sh-cloud-sync-action.is-approved { color: #F3F4F6; }
 html[data-theme="dark"] .sh-cloud-sync-apply { border-color: #1F2329; background: #1F2329; color: #FFFFFF; }
 html[data-theme="dark"] .sh-cloud-sync-apply:hover { border-color: #33353B; background: #33353B; }
-html[data-theme="dark"] .sh-cloud-sync-action.is-error-action { border-left-color: #4A3034; color: #FF9299; }
+html[data-theme="dark"] .sh-cloud-sync-action.is-error-action { color: #FF9299; }
 
 .sh-deployment-error-mask {
   position: fixed;

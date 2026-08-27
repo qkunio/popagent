@@ -65,7 +65,7 @@ function makeWebLink(key: string, target: WebLinkTarget): string {
   return `https://popagent.example.com/${target === 'public' ? 'webapp' : 'internal'}/${token}`
 }
 
-type WorkspaceTabId = 'preview' | 'code' | 'config' | 'evolution' | 'service' | 'history'
+type WorkspaceTabId = 'preview' | 'code' | 'config' | 'evolution' | 'service' | 'history' | 'business-deploy'
 
 const WORKSPACE_TAB_DEFS: Array<{ id: WorkspaceTabId; label: string; icon: string }> = [
   { id: 'preview', label: '预览', icon: 'columns' },
@@ -74,6 +74,7 @@ const WORKSPACE_TAB_DEFS: Array<{ id: WorkspaceTabId; label: string; icon: strin
   { id: 'evolution', label: '进化', icon: 'arrow-clockwise' },
   { id: 'service', label: '服务', icon: 'cloud' },
   { id: 'history', label: '版本历史', icon: 'clock-clockwise' },
+  { id: 'business-deploy', label: '部署到业务平台', icon: 'export' },
 ]
 
 function previewTitle(p: AppPreview | null | undefined): string {
@@ -712,6 +713,9 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   const activeWorkspaceTab = requestedActiveTab !== undefined && requestedActiveTab !== null && workspaceTabs.includes(requestedActiveTab)
     ? requestedActiveTab
     : workspaceTabs[0] || null
+  const availableWorkspaceTabDefs = data?.type === 'webapp'
+    ? WORKSPACE_TAB_DEFS
+    : WORKSPACE_TAB_DEFS.filter(def => def.id !== 'business-deploy')
 
   useEffect(() => {
     setSkillPublishOpen(false)
@@ -1280,13 +1284,13 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
         </button>
         {addMenuOpen && (
           <div className="kb-add-tab-menu" role="menu">
-            {WORKSPACE_TAB_DEFS.filter(def => !workspaceTabs.includes(def.id)).map(def => (
+            {availableWorkspaceTabDefs.filter(def => !workspaceTabs.includes(def.id)).map(def => (
               <button type="button" role="menuitem" key={def.id} onClick={() => openWorkspaceTab(def.id)}>
                 {def.id === 'code' ? <span className="kb-code-glyph">&lt;/&gt;</span> : <Icon name={def.icon} cls="ic" />}
                 <span>{def.label}</span>
               </button>
             ))}
-            {WORKSPACE_TAB_DEFS.every(def => workspaceTabs.includes(def.id)) && (
+            {availableWorkspaceTabDefs.every(def => workspaceTabs.includes(def.id)) && (
               <div className="kb-add-tab-empty">所有标签页均已打开</div>
             )}
           </div>
@@ -1332,6 +1336,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
       evolution: '根据使用反馈持续优化应用能力。',
       service: '查看应用依赖的工具、连接器和在线服务。',
       history: '浏览应用的版本记录，并可回到之前的版本。',
+      'business-deploy': '将当前 WebApp 部署到指定的业务平台。',
     }
     return (
       <div className={'kb-tool-pane tool-' + tabId}>
@@ -1351,6 +1356,12 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
             <label><span>应用名称</span><input readOnly value={currentApp ? previewTitle(currentApp.preview) : '未命名应用'} /></label>
             <label><span>运行模式</span><input readOnly value="自动" /></label>
             <label><span>访问权限</span><input readOnly value="仅团队成员" /></label>
+          </div>
+        ) : tabId === 'business-deploy' ? (
+          <div className="kb-tool-cards">
+            <div><strong>部署目标</strong><span>业务平台</span></div>
+            <div><strong>当前状态</strong><span>待配置</span></div>
+            <div><strong>下一步</strong><span>选择平台并开始部署</span></div>
           </div>
         ) : (
           <div className="kb-tool-cards">
