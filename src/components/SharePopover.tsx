@@ -572,10 +572,10 @@ export function SharePopover({
   const webAppDeploymentError = deploymentStatus === 'error'
   const internetExternalShareActive = externalShareRequested && visibilityScope === 'internet'
   const externalLinkMaking = internetExternalShareActive && externalShareStatus !== 'generated'
-  const cloudSyncState = !shareUrl
-    ? 'unpublished'
-    : webAppDeploymentError
+  const cloudSyncState = webAppDeploymentError
     ? 'error'
+    : !shareUrl
+      ? 'unpublished'
     : deploymentStatus && deploymentStatus !== 'deployed' || externalLinkMaking || externalOnlineOutdated
       ? 'syncing'
       : 'synced'
