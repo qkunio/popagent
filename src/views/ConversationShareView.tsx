@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import { Icon } from '../components/Icon'
+import { api } from '../api'
+import { CONVERSATION_SHARE_OPEN_TASK_KEY } from '../conversationShare'
 
 const SHARED_MESSAGES = [
   { role: 'user', text: '帮我分析一下最近作品的表现，重点看看播放和互动为什么下降。', time: '8月26日 10:18' },
@@ -8,17 +11,39 @@ const SHARED_MESSAGES = [
 ] as const
 
 export function ConversationShareView() {
+  const [creatingChat, setCreatingChat] = useState(false)
+
+  const continueInXAgent = async () => {
+    if (creatingChat) return
+    setCreatingChat(true)
+    try {
+      const { id } = await api.createTaskWithMessages(
+        '作品表现分析与优化建议',
+        SHARED_MESSAGES.map(message => ({ role: message.role, content: message.text })),
+      )
+      sessionStorage.setItem(CONVERSATION_SHARE_OPEN_TASK_KEY, id)
+      const homeUrl = new URL('./', window.location.href)
+      homeUrl.hash = ''
+      homeUrl.search = ''
+      window.location.assign(homeUrl.href)
+    } catch {
+      setCreatingChat(false)
+    }
+  }
+
   return (
     <main className="conversation-share-page">
       <header className="conversation-share-header">
-        <div className="conversation-share-brand"><span>P</span><strong>Pop Agent</strong></div>
-        <div className="conversation-share-readonly"><Icon name="lock" cls="ic" />只读分享</div>
+        <div className="conversation-share-brand"><span>X</span><strong>XAgent</strong></div>
       </header>
       <section className="conversation-share-card">
         <div className="conversation-share-title">
-          <span>分享的对话</span>
           <h1>作品表现分析与优化建议</h1>
-          <p>由 Pop Agent 生成 · 2026年8月26日</p>
+          <p className="conversation-share-summary">围绕近期作品播放与互动变化，定位下降原因，并整理可以直接执行的优化方案。</p>
+          <div className="conversation-share-meta">
+            <span className="conversation-share-avatar">X</span>
+            <span>来自 <strong>XAgent</strong></span>
+          </div>
         </div>
         <div className="conversation-share-messages">
           {SHARED_MESSAGES.map((message, index) => (
@@ -31,8 +56,12 @@ export function ConversationShareView() {
             </article>
           ))}
         </div>
-        <footer className="conversation-share-footer">此页面为分享快照，内容不会随原对话更新</footer>
       </section>
+      <button type="button" className="conversation-share-continue" onClick={continueInXAgent} disabled={creatingChat}>
+        <Icon name="sparkles" cls="ic" />
+        <span>{creatingChat ? '正在创建新会话…' : '在 XAgent 里继续聊'}</span>
+        <Icon name="arrow-right" cls="ic arrow" />
+      </button>
     </main>
   )
 }
