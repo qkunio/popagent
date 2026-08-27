@@ -702,6 +702,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   const webPublishState = webPublishByApp[webAppKey] || makeWebPublishState()
   const activeWebLinkTarget = webLinkTarget(webPublishState.visibility)
   const activeWebLink = webPublishState[activeWebLinkTarget]
+  const webPreviewShareApprovalRequired = data?.type === 'webapp' && activeWebLink.status === 'approval'
   const restoredSkillState = useMemo(() => readPreviewSession<SkillAppSessionState>('skill', appKey), [appKey])
   const restoredWorkspaceState = useMemo(() => readPreviewSession<WorkspacePreviewSessionState>('workspace', appKey), [appKey])
   const skillFiles = data?.type === 'skill' ? (skillFilesByApp[appKey] || restoredSkillState?.files || data.files) : []
@@ -720,14 +721,6 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     setSkillTestOpen(Boolean(restoredSkillState?.testOpen))
     setPendingWorkspaceTab(null)
   }, [appKey, restoredSkillState?.testOpen])
-
-  useEffect(() => {
-    if (data?.type === 'sharepage') setShareOpen(true)
-  }, [appKey, data?.type])
-
-  useEffect(() => {
-    if (data?.type === 'webapp' && externalShareRequested) setShareOpen(true)
-  }, [appKey, data?.type, externalShareRequested])
 
   const startWebDeployment = (targetAppKey: string, target: WebLinkTarget, version: number, approvalSubmitted = false) => {
     const timerKey = `${targetAppKey}:${target}`
@@ -750,10 +743,10 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
       }
     })
 
-    const approveDeployment = () => setWebPublishByApp(current => {
+    const startPublishing = () => setWebPublishByApp(current => {
       const state = current[targetAppKey]
       if (!state || state[target].targetVersion !== version || state[target].status !== 'reviewing') return current
-      return { ...current, [targetAppKey]: { ...state, [target]: { ...state[target], status: 'approved' } } }
+      return { ...current, [targetAppKey]: { ...state, [target]: { ...state[target], status: 'deploying' } } }
     })
     const completeDeployment = () => setWebPublishByApp(current => {
       const state = current[targetAppKey]
@@ -779,7 +772,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
       return
     }
     webDeployTimersRef.current[timerKey] = target === 'public'
-      ? [window.setTimeout(approveDeployment, 1600)]
+      ? [window.setTimeout(startPublishing, 1600), window.setTimeout(completeDeployment, 4600)]
       : [window.setTimeout(completeDeployment, 3000)]
   }
 
@@ -1507,8 +1500,21 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     k.status_tag.color === 'grn' ? 'grn' : 'ok'
 
   return (
-    <div className={'kb-wrap' + (k.theme === 'violet' ? ' kb-theme-violet' : '')}>
+    <div className={'kb-wrap kb-wrap-webapp' + (k.theme === 'violet' ? ' kb-theme-violet' : '')}>
       {workspaceHeader}
+
+      {webPreviewShareApprovalRequired && (
+        <div className="kb-preview-share-approval">
+          <button
+            type="button"
+            className="kb-preview-share-approval-btn"
+            onClick={() => setShareOpen(true)}
+          >
+            <Icon name="link" cls="ic" />
+            <span>此链接分享需申请</span>
+          </button>
+        </div>
+      )}
 
       <div className="kb-body">
         <div className="kb-card">

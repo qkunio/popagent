@@ -567,7 +567,9 @@ export function SharePopover({
   const webAppDeploymentError = deploymentStatus === 'error'
   const internetExternalShareActive = externalShareRequested && visibilityScope === 'internet'
   const externalLinkMaking = internetExternalShareActive && externalShareStatus !== 'generated'
-  const cloudSyncState = webAppDeploymentError
+  const cloudSyncState = !shareUrl
+    ? 'unpublished'
+    : webAppDeploymentError
     ? 'error'
     : deploymentStatus && deploymentStatus !== 'deployed' || externalLinkMaking || externalOnlineOutdated
       ? 'syncing'
@@ -575,7 +577,7 @@ export function SharePopover({
   const cloudSyncLabel = deploymentStatus === 'error'
     ? '出错'
     : !shareUrl
-      ? '无链接'
+      ? '未发布'
       : deploymentStatus === 'deployed'
       ? '已发布'
       : '版本落后'
@@ -717,7 +719,7 @@ export function SharePopover({
             )}
             {deploymentStatus === 'approval' && (
               <>
-                <span className="sh-cloud-sync-action is-static is-blocked">「互联网可见」链接的创建与更新需审核</span>
+                <span className="sh-cloud-sync-action is-static is-blocked">对外发布与更新需审核</span>
                 <button type="button" className="sh-cloud-sync-apply" onClick={() => setExternalApprovalOpen(true)}>点击申请</button>
               </>
             )}
