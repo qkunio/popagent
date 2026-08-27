@@ -48,6 +48,7 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
   const [externalShareAnnouncementPending, setExternalShareAnnouncementPending] = useState(false)
   const [webDeploymentErrorNonce, setWebDeploymentErrorNonce] = useState(0)
   const laneRef = useRef<HTMLDivElement>(null)
+  const selectBelowDividerRef = useRef<HTMLDivElement>(null)
   const toast = useToast()
 
   const streamVersion = useRef(0)
@@ -129,6 +130,14 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
   const roundIdByMessage = useMemo(() => {
     const map = new Map<string, string>()
     shareRounds.forEach(round => round.messageIds.forEach(messageId => map.set(messageId, round.id)))
+    return map
+  }, [shareRounds])
+
+  const roundIndexByMessage = useMemo(() => {
+    const map = new Map<string, number>()
+    shareRounds.forEach((round, index) => {
+      round.messageIds.forEach(messageId => map.set(messageId, index))
+    })
     return map
   }, [shareRounds])
 
@@ -444,6 +453,22 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
     setSelectedRoundIds(allRoundsSelected ? [] : shareRounds.map(round => round.id))
   }
 
+  const selectRoundsBelowDivider = () => {
+    const lane = laneRef.current
+    const divider = selectBelowDividerRef.current
+    if (!lane || !divider) return
+
+    const dividerBottom = divider.getBoundingClientRect().bottom
+    const firstMessageBelow = Array.from(lane.querySelectorAll<HTMLElement>('.s-msg[data-share-round-index]'))
+      .find(message => message.getBoundingClientRect().bottom > dividerBottom)
+    if (!firstMessageBelow) return
+
+    const startIndex = Number(firstMessageBelow.dataset.shareRoundIndex)
+    if (!Number.isFinite(startIndex)) return
+    const roundIds = shareRounds.slice(startIndex).map(round => round.id)
+    setSelectedRoundIds(current => Array.from(new Set([...current, ...roundIds])))
+  }
+
   const copyConversationShareLink = async () => {
     if (!taskId || selectedRoundIds.length === 0) return
     const link = getConversationShareUrl()
@@ -467,33 +492,47 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
             <div className="chat-top-left">
               <div className="chat-title" title={task?.title}>{task?.title || '对话'}</div>
             </div>
-            {!showPreview && currentPreview && (
+            {!shareMode && (
               <div className="chat-top-right">
-                <button
-                  type="button"
-                  className="split-toggle-btn"
-                  aria-label="展开产物分屏"
-                  title="展开分屏"
-                  onClick={() => {
-                    if (taskId) sessionStorage.removeItem('previewClosed:' + taskId)
-                    setPreviewOpen(true)
-                  }}
-                >
-                  <Icon name="columns" cls="ic" />
+                <button type="button" className="split-toggle-btn" aria-label="分享对话" title="分享对话" onClick={() => { setSelectedRoundIds([]); setShareMode(true) }}>
+                  <Icon name="export" cls="ic" />
                 </button>
+                {!showPreview && currentPreview && (
+                  <button
+                    type="button"
+                    className="split-toggle-btn"
+                    aria-label="展开产物分屏"
+                    title="展开分屏"
+                    onClick={() => {
+                      if (taskId) sessionStorage.removeItem('previewClosed:' + taskId)
+                      setPreviewOpen(true)
+                    }}
+                  >
+                    <Icon name="columns" cls="ic" />
+                  </button>
+                )}
               </div>
             )}
           </header>
           <div className={'conv-simple' + (shareMode ? ' share-mode' : '')}>
             <div className="conv-flow" ref={laneRef}>
+              {shareMode && (
+                <div className="s-select-below-divider" ref={selectBelowDividerRef}>
+                  <span aria-hidden="true" />
+                  <button type="button" onClick={selectRoundsBelowDivider}>选择以下消息</button>
+                  <span aria-hidden="true" />
+                </div>
+              )}
               {msgs.map(m => {
                 const permissionLevels = permissionLevelsForMessage(m)
                 const messageRoundId = roundIdByMessage.get(m.id)
                 const roundSelected = Boolean(messageRoundId && selectedRoundIds.includes(messageRoundId))
+                const messageRoundIndex = roundIndexByMessage.get(m.id)
                 return (
                 <div
                   key={m.id}
                   className={'s-msg ' + (m.role === 'user' ? 'me' : 'ai') + (shareMode ? ' share-selectable' : '') + (roundSelected ? ' selected' : '')}
+                  data-share-round-index={shareMode ? messageRoundIndex : undefined}
                   aria-selected={shareMode ? roundSelected : undefined}
                   onClick={event => {
                     if (!shareMode || (event.target as HTMLElement).closest('button')) return

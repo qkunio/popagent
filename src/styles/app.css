@@ -2060,6 +2060,38 @@ html[data-theme="dark"] .set-seg button.on { box-shadow: none; }
 .s-msg.selected .s-share-check { border-color: #25272C; background: #25272C; }
 .s-share-check .ic { width: 12px; height: 12px; }
 
+.s-select-below-divider {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  width: 100%;
+  height: 32px;
+  margin: 0 auto 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+}
+.s-select-below-divider > span {
+  height: 1px;
+  flex: 1;
+  background: #E5E7EA;
+  transition: background .14s ease;
+}
+.s-select-below-divider button {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid #D9DCE0;
+  border-radius: 7px;
+  background: #FFFFFF;
+  color: #4E5969;
+  box-shadow: 0 4px 12px rgba(15,23,42,.06);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .s-share-mode-bar {
   width: auto;
   min-height: 0;
@@ -2421,6 +2453,9 @@ html[data-theme="dark"] .s-msg.share-selectable:hover::before { background: rgba
 html[data-theme="dark"] .s-msg.share-selectable.selected::before { background: #343A45; }
 html[data-theme="dark"] .s-share-check { border-color: #596273; background: #1A1E25; }
 html[data-theme="dark"] .s-msg.selected .s-share-check { border-color: #E5E7EB; background: #E5E7EB; color: #1A1E25; }
+html[data-theme="dark"] .s-select-below-divider { background: transparent; }
+html[data-theme="dark"] .s-select-below-divider > span { background: #4A5260; }
+html[data-theme="dark"] .s-select-below-divider button { border-color: #4A5260; background: #1F2329; color: #C9CDD4; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
 html[data-theme="dark"] .s-share-mode-bar { border: 0; background: transparent; box-shadow: none; }
 html[data-theme="dark"] .s-share-mode-bar .select-all { border-color: #4A5260; background: #1F2329; color: #E5E7EB; }
 html[data-theme="dark"] .s-share-mode-bar .exit-share-mode { border-color: #4A5260; background: #1F2329; color: #E5E7EB; }
