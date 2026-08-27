@@ -188,12 +188,17 @@ export function SharePopover({
     setLocalToast('')
     setExternalApprovalOpen(false)
     setExternalApprovalReason('')
+    setDeploymentErrorOpen(false)
     if (localToastTimerRef.current !== null) {
       window.clearTimeout(localToastTimerRef.current)
       localToastTimerRef.current = null
     }
     return () => window.clearTimeout(id)
   }, [open])
+
+  useEffect(() => {
+    if (deploymentStatus !== 'error') setDeploymentErrorOpen(false)
+  }, [deploymentStatus])
 
   const handleLinkAction = () => {
     if (managedWebAppDeployment) {
