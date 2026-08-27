@@ -735,6 +735,25 @@ export const api = {
     return { id }
   },
 
+  async createTaskWithMessages(title: string, messages: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<{ id: string }> {
+    const s = loadStore()
+    const now = Date.now()
+    const id = 't_' + now
+    s.tasks.push({ id, title, folder_id: 'f_default', skill_id: null, status: 'active', dot: '', created_at: now, updated_at: now })
+    s.messages.push(...messages.map((message, index) => ({
+      id: `m_${now}_${index}`,
+      task_id: id,
+      role: message.role,
+      content: message.content,
+      trace: [],
+      sources: [],
+      feedback: null,
+      created_at: now + index,
+    })))
+    saveStore(s)
+    return { id }
+  },
+
   async deleteTask(id: string): Promise<{ ok: boolean }> {
     const s = loadStore()
     s.tasks = s.tasks.filter(t => t.id !== id)

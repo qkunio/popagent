@@ -12,7 +12,7 @@ import { AppsView } from './views/AppsView'
 import { DataOverviewView } from './views/DataOverviewView'
 import { SharePopover } from './components/SharePopover'
 import { ConversationShareView } from './views/ConversationShareView'
-import { getConversationShareUrl } from './conversationShare'
+import { CONVERSATION_SHARE_OPEN_TASK_KEY, getConversationShareUrl } from './conversationShare'
 import type { Prefs } from './api'
 
 export type ViewName = 'home' | 'task' | 'skills' | 'apps' | 'data'
@@ -67,6 +67,15 @@ function Shell() {
     api.connectors().then(setConnectors).catch(() => {})
     api.me().then(setMe).catch(() => setMe({ name: '本地用户', role: '纯前端演示', authenticated: false }))
     api.getPrefs().then(setPrefs).catch(() => {})
+    refreshSidebar()
+  }, [refreshSidebar])
+
+  useEffect(() => {
+    const sharedTaskId = sessionStorage.getItem(CONVERSATION_SHARE_OPEN_TASK_KEY)
+    if (!sharedTaskId) return
+    sessionStorage.removeItem(CONVERSATION_SHARE_OPEN_TASK_KEY)
+    setActiveTaskId(sharedTaskId)
+    setView('task')
     refreshSidebar()
   }, [refreshSidebar])
 

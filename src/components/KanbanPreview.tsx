@@ -49,7 +49,7 @@ const EMPTY_WEB_LINK: WebLinkDeployment = { url: null, deployedVersion: 0, targe
 
 function makeWebPublishState(): WebPublishState {
   return {
-    visibility: 'partial',
+    visibility: 'company',
     publicPreparationDone: false,
     internal: { ...EMPTY_WEB_LINK },
     public: { ...EMPTY_WEB_LINK },

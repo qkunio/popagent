@@ -480,6 +480,13 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
     } catch { toast('复制失败') }
   }
 
+  const copyWholeConversationShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(getConversationShareUrl())
+      toast('完整会话链接已复制')
+    } catch { toast('复制失败') }
+  }
+
   if (!task) return <section className="view on"><div className="pagebody"><div className="frow-empty">加载中…</div></div></section>
 
   const showPreview = previewOpen
@@ -494,7 +501,7 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
             </div>
             {!shareMode && (
               <div className="chat-top-right">
-                <button type="button" className="split-toggle-btn" aria-label="分享对话" title="分享对话" onClick={() => { setSelectedRoundIds([]); setShareMode(true) }}>
+                <button type="button" className="split-toggle-btn" aria-label="复制完整会话链接" title="复制完整会话链接" onClick={copyWholeConversationShareLink}>
                   <Icon name="export" cls="ic" />
                 </button>
                 {!showPreview && currentPreview && (
