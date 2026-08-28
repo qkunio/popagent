@@ -814,6 +814,22 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   }
 
   useEffect(() => {
+    if (data?.type !== 'webapp' || !externalShareRequested) return
+    setWebPublishByApp(current => {
+      const state = current[webAppKey] || makeWebPublishState()
+      if (state.visibility === 'internet' && state.publicPreparationDone) return current
+      return {
+        ...current,
+        [webAppKey]: {
+          ...state,
+          visibility: 'internet',
+          publicPreparationDone: true,
+        },
+      }
+    })
+  }, [data?.type, externalShareRequested, webAppKey])
+
+  useEffect(() => {
     if (data?.type !== 'webapp') return
     if (activeWebLinkTarget === 'public' && externalAnnouncementPending) return
     const inFlightForCurrentVersion = activeWebLink.targetVersion === editorVersion
@@ -1105,7 +1121,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
         onSubmitDeploymentApproval={data?.type === 'webapp' ? () => startWebDeployment(webAppKey, 'public', editorVersion, true) : undefined}
         onGenerateDeployment={data?.type === 'webapp' ? () => generateApprovedWebLink(webAppKey, editorVersion) : undefined}
         externalShareStatus={(data?.type === 'sharepage' || data?.type === 'webapp') ? externalShareStatus : undefined}
-        externalShareRequested={data?.type === 'sharepage' && externalShareRequested}
+        externalShareRequested={externalShareRequested}
         externalAgentGenerating={externalAgentGenerating}
         onExternalShareAction={onExternalShareAction}
         managedWebAppDeployment={data?.type === 'webapp'}

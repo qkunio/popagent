@@ -912,8 +912,16 @@ export async function streamChat(
 
   let { content, trace, sources, app_preview } = mockAIResponse(message, skillId)
 
+  const previousWebAppForExternalShare = [...s.messages]
+    .reverse()
+    .find(item => item.task_id === taskId && item.app_preview?.type === 'webapp')
+
   if (/做一个对外(?:链接|连接)/.test(message)) {
-    app_preview = null
+    // “做一个对外链接”始终是 WebApp 的发布动作，不再生成独立的分享页类型。
+    // 当前会话已有 WebApp 时继续使用现有预览；从零触发时先补一个标准 WebApp 预览。
+    app_preview = previousWebAppForExternalShare
+      ? null
+      : mockAIResponse('做一个WebApp', skillId).app_preview || null
     content = `已开始为当前 WebApp 准备对外访问。\n\n访问范围已设置为互联网可见。请先申请分享权限，审批通过后即可生成并复制线上链接。`
     trace = [
       { tool: 'prepare_external_access', connector: '分享引擎', label: '分享引擎 · prepare_external_access()', status: 'ok', ms: 180 },

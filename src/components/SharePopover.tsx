@@ -151,7 +151,11 @@ export function SharePopover({
   }, [controlledVisibilityScope])
 
   useEffect(() => {
-    if (externalShareRequested) setVisibilityScope('internet')
+    if (!externalShareRequested) return
+    setVisibilityScope('internet')
+    setInternetConfirmOpen(false)
+    setInternetAcknowledged(false)
+    setInternetGenerating(false)
   }, [externalShareRequested])
 
   useLayoutEffect(() => {
@@ -594,12 +598,12 @@ export function SharePopover({
         <h3 className="sh-title">{title}</h3>
       </div>
 
-      {webpageOnly && externalShareStatus !== 'generated' ? (
+      {webpageOnly && !externalShareRequested && externalShareStatus !== 'generated' ? (
         <div className="sh-external-page-making">
           <div className="sh-external-visibility"><span>可访问范围</span><strong>互联网可见</strong></div>
           <div className="sh-external-making-status"><span className="sh-internet-spinner" aria-hidden="true" /><span>网页正在制作中</span></div>
         </div>
-      ) : webpageOnly ? (
+      ) : webpageOnly && !externalShareRequested ? (
         <div className="sh-webpage-share">
           <p className="sh-webpage-share-notice">请确认数据安全后再对外分享～</p>
           <button type="button" className="sh-copy-btn sh-webpage-copy-btn" onClick={copyLink}>
@@ -620,7 +624,7 @@ export function SharePopover({
         </div>
       ) : null}
 
-      {!webpageOnly && (
+      {(!webpageOnly || externalShareRequested) && (
         <>
         <div className="sh-access-row">
         <span className="sh-access-label">可访问范围</span>
@@ -642,7 +646,7 @@ export function SharePopover({
                   aria-selected={visibilityScope === value}
                   key={value}
                   onClick={() => {
-                    if (managedWebAppDeployment && value === 'internet' && visibilityScope !== 'internet' && !internetPreparationDone) {
+                    if (managedWebAppDeployment && value === 'internet' && visibilityScope !== 'internet' && !internetPreparationDone && !externalShareRequested) {
                       previousVisibilityScopeRef.current = visibilityScope
                       setVisibilityMenuOpen(false)
                       setInternetConfirmOpen(true)

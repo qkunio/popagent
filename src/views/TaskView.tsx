@@ -256,6 +256,11 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
     version: number, aborted: { current: boolean },
   ) => {
     if (!taskId || busy) return
+    if (/做一个对外(?:链接|连接)/.test(text)) {
+      setExternalShareRequested(true)
+      setExternalShareAnnouncementPending(true)
+      setExternalShareStatus('idle')
+    }
     setBusy(true)
     setProgress(10)
 
