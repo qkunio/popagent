@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Icon } from '../components/Icon'
 import { api } from '../api'
 import { CONVERSATION_SHARE_OPEN_TASK_KEY } from '../conversationShare'
-import { ArrowSquareOut, DownloadSimple, FileText, Globe } from '@phosphor-icons/react'
+import { DownloadSimple, FileText, FrameCorners, Globe } from '@phosphor-icons/react'
 
 const SHARED_MESSAGES = [
   { role: 'user', text: '做一个 demo.md' },
@@ -44,18 +44,10 @@ export function ConversationShareView() {
     if (creatingChat) return
     setCreatingChat(true)
     try {
-      const { id } = await api.createTaskWithMessages(
-        '作品表现分析与优化建议',
-        SHARED_MESSAGES.map(message => ({ role: message.role, content: message.text })),
-      )
+      const { id } = await api.createTaskWithMessages('作品表现分析与优化建议', SHARED_MESSAGES.map(message => ({ role: message.role, content: message.text })))
       sessionStorage.setItem(CONVERSATION_SHARE_OPEN_TASK_KEY, id)
-      const homeUrl = new URL('./', window.location.href)
-      homeUrl.hash = ''
-      homeUrl.search = ''
-      window.location.assign(homeUrl.href)
-    } catch {
-      setCreatingChat(false)
-    }
+      window.location.assign(new URL('./', window.location.href).href)
+    } catch { setCreatingChat(false) }
   }
 
   return (
@@ -99,8 +91,8 @@ export function ConversationShareView() {
             <button type="button" className="conversation-share-app-switcher-btn" aria-label="切换应用" aria-expanded={appMenuOpen} onClick={() => setAppMenuOpen(open => !open)}><span>{selectedPreview.name}</span><Icon name="caret-down" cls="ic" /></button>
             {appMenuOpen && <div className="conversation-share-app-menu" role="listbox"><div className="conversation-share-app-caption">{previewKind === 'file' ? '文件' : '网站'}</div>{activeApps.map(app => <button type="button" role="option" aria-selected={app.id === selectedPreview.id} className={app.id === selectedPreview.id ? 'on' : ''} key={app.id} onClick={() => { setPreviewApp(app.id); setAppMenuOpen(false) }}>{app.name}</button>)}</div>}
             <div className="conversation-share-preview-actions">
-              <button type="button" aria-label={previewKind === 'file' ? '下载文件' : '打开链接'} title={previewKind === 'file' ? '下载' : '打开链接'} onClick={previewKind === 'file' ? downloadFile : () => window.open(window.location.href, '_blank')}>
-                {previewKind === 'file' ? <DownloadSimple size={18} weight="regular" /> : <ArrowSquareOut size={18} weight="regular" />}
+              <button type="button" aria-label={previewKind === 'file' ? '下载文件' : '全屏查看'} title={previewKind === 'file' ? '下载' : '全屏查看'} onClick={previewKind === 'file' ? downloadFile : () => window.open(window.location.href, '_blank')}>
+                {previewKind === 'file' ? <DownloadSimple size={18} weight="regular" /> : <FrameCorners size={18} weight="regular" />}
               </button>
               <button type="button" aria-label="收起分栏" title="收起分栏" onClick={() => setPreviewApp(null)}><Icon name="columns" cls="ic" /></button>
             </div>
@@ -113,9 +105,7 @@ export function ConversationShareView() {
         </aside>
       </>}
       <button type="button" className="conversation-share-continue" onClick={continueInXAgent} disabled={creatingChat}>
-        <Icon name="sparkles" cls="ic" />
-        <span>{creatingChat ? '正在创建新会话…' : '在 XAgent 里继续聊'}</span>
-        <Icon name="arrow-right" cls="ic arrow" />
+        <Icon name="sparkles" cls="ic" /><span>{creatingChat ? '正在创建新会话…' : '在 XAgent 里继续聊'}</span><Icon name="arrow-right" cls="ic arrow" />
       </button>
     </main>
   )

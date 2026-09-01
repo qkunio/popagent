@@ -5,7 +5,8 @@ import { SharePopover, type VisibilityScope, type WebDeploymentStatus } from './
 import { SkillDetailDialog } from './SkillDetailDialog'
 import { SkillAppPreview, type SkillAppPreviewHandle } from './SkillAppPreview'
 import { ScriptAppPreview } from './ScriptAppPreview'
-import type { AgentPreview, AppPreview, KanbanPreview as KanbanPreviewData, SkillAppFile, SkillAppPreview as SkillAppPreviewData, WebpagePreview, ScriptAppPreview as ScriptAppPreviewData } from '../types'
+import { FileAppPreview } from './FileAppPreview'
+import type { AgentPreview, AppPreview, FileAppPreview as FileAppPreviewData, KanbanPreview as KanbanPreviewData, SkillAppFile, SkillAppPreview as SkillAppPreviewData, WebpagePreview, ScriptAppPreview as ScriptAppPreviewData } from '../types'
 import type { AppPreviewItem } from '../views/TaskView'
 import { ensureAgentDefaultSkills, publishSkillToLibrary, readSkillLibrary, toggleLibrarySkillInstalled, useSkillLibrary } from '../skillLibraryStore'
 import { downloadSkillZip } from '../skillZip'
@@ -62,7 +63,7 @@ function webLinkTarget(scope: VisibilityScope): WebLinkTarget {
 
 function makeWebLink(key: string, target: WebLinkTarget): string {
   const token = encodeURIComponent(key.toLowerCase().replace(/\s+/g, '-'))
-  return `https://popagent.example.com/${target === 'public' ? 'webapp' : 'internal'}/${token}`
+  return `${window.location.origin}/#/share/app?name=${token}`
 }
 
 type WorkspaceTabId = 'preview' | 'code' | 'config' | 'evolution' | 'service' | 'history' | 'business-deploy'
@@ -77,12 +78,17 @@ const WORKSPACE_TAB_DEFS: Array<{ id: WorkspaceTabId; label: string; icon: strin
   { id: 'business-deploy', label: '部署到业务平台', icon: 'export' },
 ]
 
+function previewGroup(p: AppPreview | null | undefined): 'file' | 'app' {
+  return p?.type === 'file' ? 'file' : 'app'
+}
+
 function previewTitle(p: AppPreview | null | undefined): string {
   if (!p) return '未命名应用'
   if (p.type === 'sharepage') return p.cover.title || '分享页面'
   if (p.type === 'agent') return p.name || 'Agent 应用'
   if (p.type === 'skill') return p.name || 'SkillApp'
   if (p.type === 'script') return p.name || 'Script App'
+  if (p.type === 'file') return p.name || '未命名文件'
   return p.title || '未命名 WebApp'
 }
 
@@ -713,9 +719,11 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
   const activeWorkspaceTab = requestedActiveTab !== undefined && requestedActiveTab !== null && workspaceTabs.includes(requestedActiveTab)
     ? requestedActiveTab
     : workspaceTabs[0] || null
-  const availableWorkspaceTabDefs = data?.type === 'webapp'
-    ? WORKSPACE_TAB_DEFS
-    : WORKSPACE_TAB_DEFS.filter(def => def.id !== 'business-deploy')
+  const availableWorkspaceTabDefs = data?.type === 'file'
+    ? WORKSPACE_TAB_DEFS.filter(def => def.id === 'preview' || def.id === 'history')
+    : data?.type === 'webapp'
+      ? WORKSPACE_TAB_DEFS
+      : WORKSPACE_TAB_DEFS.filter(def => def.id !== 'business-deploy')
 
   useEffect(() => {
     setSkillPublishOpen(false)
@@ -951,24 +959,29 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
     })
   }
 
-  const renderAppSwitcher = () => (
+  const renderAppSwitcher = () => {
+    // 文件与应用分属两组，切换器只在当前组内切换；跨组切换靠点击对话里另一组的卡片。
+    const currentGroup = previewGroup(currentApp?.preview)
+    const groupApps = apps.filter(app => previewGroup(app.preview) === currentGroup)
+    const groupCaption = currentGroup === 'file' ? '文件' : '应用'
+    return (
     <div className="kb-app-switcher" ref={menuRef}>
       <button
         type="button"
         className={'kb-app-switcher-btn' + (currentApp ? '' : ' empty')}
-        onClick={() => apps.length > 0 && setMenuOpen(v => !v)}
-        aria-label="切换应用"
+        onClick={() => groupApps.length > 0 && setMenuOpen(v => !v)}
+        aria-label={currentGroup === 'file' ? '切换文件' : '切换应用'}
         aria-expanded={menuOpen}
-        disabled={apps.length === 0}
+        disabled={groupApps.length === 0}
       >
         <span>{currentApp ? previewTitle(currentApp.preview) : '未命名应用'}</span>
         <Icon name="caret-down" cls={'kb-caret ' + (menuOpen ? 'open' : '')} />
       </button>
-      {menuOpen && apps.length > 0 && (
+      {menuOpen && groupApps.length > 0 && (
         <div className="kb-apps-menu kb-app-switcher-menu" role="listbox">
-          <div className="kb-app-switcher-caption">应用</div>
-          {apps.map((app, i) => {
-            const selected = app.id === currentAppId || (!currentAppId && i === apps.length - 1)
+          <div className="kb-app-switcher-caption">{groupCaption}</div>
+          {groupApps.map((app, i) => {
+            const selected = app.id === currentAppId || (!currentAppId && i === groupApps.length - 1)
             const t = previewTitle(app.preview)
             return (
               <button
@@ -986,7 +999,8 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
         </div>
       )}
     </div>
-  )
+    )
+  }
 
   const shareUrl = data?.type === 'webapp'
     ? activeWebLink.url || ''
@@ -1399,7 +1413,7 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
           <div className="kb-empty-ic">📊</div>
           <div className="kb-empty-title">预览面板</div>
           <div className="kb-empty-sub">
-            {empty || '输入「做一个webapp」「做一个agentapp」「做一个skillapp」或「做一个对外链接」，完成后会在这里展示预览。'}
+            {empty || '输入「做一个webapp」「做一个文件」「做一个agentapp」「做一个skillapp」或「做一个对外链接」，完成后会在这里展示预览。'}
           </div>
         </div>
       </div>
@@ -1447,6 +1461,15 @@ export function KanbanPreview({ data, empty, apps, currentAppId, onSelectApp, on
         <div className="kb-body kb-body-web">
           <SharePagePreview data={w} />
         </div>
+      </div>
+    )
+  }
+
+  if (data.type === 'file') {
+    return (
+      <div className="kb-wrap kb-wrap-file">
+        {workspaceHeader}
+        <FileAppPreview data={data as FileAppPreviewData} />
       </div>
     )
   }

@@ -141,6 +141,7 @@ export function SharePopover({
   const localToastTimerRef = useRef<number | null>(null)
   const [visibilityScope, setVisibilityScope] = useState<VisibilityScope>('partial')
   const [visibilityMenuOpen, setVisibilityMenuOpen] = useState(false)
+  const [shareRemix, setShareRemix] = useState(true)
   const [externalApprovalOpen, setExternalApprovalOpen] = useState(false)
   const [externalApprovalReason, setExternalApprovalReason] = useState('')
   const [deploymentErrorOpen, setDeploymentErrorOpen] = useState(false)
@@ -317,10 +318,14 @@ export function SharePopover({
     }
   }, [open, onClose, anchorRef, manageOpen, managePermOpenId, visibilityMenuOpen, internetConfirmOpen, externalApprovalOpen])
 
+  const effectiveShareUrl = shareUrl && shareRemix && visibilityScope !== 'internet'
+    ? shareUrl + (shareUrl.includes('?') ? '&' : '?') + 'remix=1'
+    : shareUrl
+
   const copyLink = () => {
     try {
       const el = document.createElement('div')
-      el.textContent = shareUrl
+      el.textContent = effectiveShareUrl
       el.style.position = 'fixed'
       el.style.left = '-9999px'
       document.body.appendChild(el)
@@ -334,7 +339,7 @@ export function SharePopover({
       document.body.removeChild(el)
     } catch {}
     setCopied(true)
-    onCopy?.(shareUrl)
+    onCopy?.(effectiveShareUrl)
     window.setTimeout(() => setCopied(false), 1600)
   }
 
@@ -562,7 +567,7 @@ export function SharePopover({
                   onInternetPreparationConfirmed?.()
                 }
                 onClose()
-                onInternetShare?.(shareUrl)
+                onInternetShare?.(effectiveShareUrl)
               }}
             >
               {managedWebAppDeployment ? '确认并继续' : '开始生成'}
@@ -698,7 +703,7 @@ export function SharePopover({
               <span>{externalAgentGenerating ? '网页正在制作中' : externalShareStatus === 'approved' ? '对外链接待生成' : externalShareStatus === 'generating' ? '正在发布中' : '对外连接生成需要审核'}</span>
             </div>
           ) : (
-            <div className="sh-link-box"><span className="sh-link-text">{shareUrl}</span></div>
+            <div className="sh-link-box"><a className="sh-link-text" href={effectiveShareUrl} target="_blank" rel="noreferrer">{effectiveShareUrl}</a></div>
           )}
           <button
             type="button"
@@ -743,6 +748,14 @@ export function SharePopover({
             )}
           </div>
         )}
+
+        {visibilityScope !== 'internet' && <div className="sh-share-options">
+          <label className="sh-share-option">
+            <input type="checkbox" checked={shareRemix} onChange={event => setShareRemix(event.target.checked)} />
+            <span className="sh-share-option-box"><Icon name="check" cls="ic" /></span>
+            <span className="sh-share-option-text"><strong>开启「做同款」功能</strong><em>页面顶部将添加个人水印，访问者可一键做同款</em></span>
+          </label>
+        </div>}
         </>
       )}
     </>
