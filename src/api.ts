@@ -85,6 +85,38 @@ function seedStore(): Store {
   return store
 }
 
+// 触发建应用类特殊 prompt 时，Agent 模拟输出的正文字数限制（按非空白字符统计）。
+const SPECIAL_REPLY_MIN_CHARS = 400
+const SPECIAL_REPLY_MAX_CHARS = 500
+const SPECIAL_REPLY_FILLERS = [
+  '右侧预览区会实时展示最新效果，改动之后不需要重新生成，刷新一下就能看到当前版本。',
+  '你可以继续告诉我需要调整的部分，无论是内容、结构还是展示样式，都可以在这一版上直接改。',
+  '后续的修改我都会同步到预览里，确认无误之后再决定要不要发布或者对外分享。',
+]
+
+function countReplyChars(text: string): number {
+  return Array.from(text.replace(/\s+/g, '')).length
+}
+
+// 不足下限时补充收尾话术，超过上限时按可见字数截断，保证正文落在 125~150 字。
+function clampSpecialReply(text: string): string {
+  let result = text.trim()
+  for (const filler of SPECIAL_REPLY_FILLERS) {
+    if (countReplyChars(result) >= SPECIAL_REPLY_MIN_CHARS) break
+    result += `\n\n${filler}`
+  }
+  if (countReplyChars(result) <= SPECIAL_REPLY_MAX_CHARS) return result
+  let kept = ''
+  let count = 0
+  for (const char of Array.from(result)) {
+    if (/\s/.test(char)) { kept += char; continue }
+    if (count >= SPECIAL_REPLY_MAX_CHARS - 1) break
+    kept += char
+    count++
+  }
+  return `${kept.replace(/[\s，,、。；;：:！!？?]+$/, '')}。`
+}
+
 function mockAIResponse(message: string, skillId?: string): { content: string; trace: TraceStep[]; sources: string[]; app_preview?: AppPreview | null } {
   let appIdx = 0
   let webpageIdx = 0
@@ -265,7 +297,15 @@ function mockAIResponse(message: string, skillId?: string): { content: string; t
         { name: 'sentiment', type: 'string', description: '情感判断' },
       ],
     }
-    content = `status=completed，Script App 构建成功。\n\n应用信息\n\n- 名称：${scriptName}（app_id=16222）\n- 输入：text（待分析文本）、max_keywords（关键词数量，默认 5）\n- 输出：summary（摘要）、keywords（关键词数组）、sentiment（情感判断）\n\n实现要点\n\n- 通过一次模型调用完成摘要、关键词提取和情感判断\n- 输入参数已生成校验，右侧可以直接运行测试。`
+    content = `Script App 已经构建完成，应用 ID 为 16222，右侧预览区可以直接填写参数并试跑。
+
+这个应用接收两个输入：text 是需要分析的文本内容，为必填项；max_keywords 控制提取关键词的最大数量，不填时默认取 5 个。输出包含三项结果：summary 是整段文本的摘要，keywords 是关键词数组，sentiment 是整体情感判断。
+
+实现上我把三件事合并到了一次模型调用里完成，避免多轮请求带来的额外延迟和成本。输入参数已经自动生成了类型校验，缺少必填项或者类型不符时会直接提示，不会把脏数据带到下游环节。输出结构是固定的 JSON，字段名和类型都不会随内容变化，可以放心被其他应用直接引用。
+
+需要说明的是，摘要长度目前由模型自行判断，遇到超长文本时会优先保证信息完整而不是压缩字数；如果你的场景对长度有硬性要求，可以把它改成固定区间。
+
+你可以先在右侧跑一条真实文本看看效果。如果需要补充输入字段、调整输出结构，或者把摘要长度和关键词粒度改成明确规则，告诉我具体要求，我接着改。`
     trace = [
       { tool: 'define_script', connector: '应用引擎', label: '应用引擎 · define_script()', status: 'ok', ms: 120 },
       { tool: 'build_script_app', connector: '应用引擎', label: `应用引擎 · build_script_app(${scriptName})`, status: 'ok', ms: 240 },
@@ -294,7 +334,15 @@ function mockAIResponse(message: string, skillId?: string): { content: string; t
         },
       ],
     }
-    content = `SkillApp 已经创建好了，并已自动保存到技能库的“我的”。\n\n右侧可以直接查看和编辑 \`SKILL.md\`，并通过文件树打开它引用的 SOP 与参考文件。完成后可点击右上角“发布”，发布为官方技能。`
+    content = `SkillApp 已经创建完成，并且自动保存到了技能库的“我的”分组，你随时可以在技能库里找到它。
+
+右侧可以直接查看和编辑 SKILL.md，这是这个技能的主文件，里面写清楚了它的作用、工作流程和输出要求。通过文件树还能打开它引用的两个附件：sop 目录下是分步执行的操作步骤，references 目录下是筛选用的检查清单。
+
+主文件和附件是分开的：主文件只保留判断逻辑和整体流程，细节放在附件里按需加载。这样技能被调用时占用的上下文更短，执行过程也更稳定，后续想改某个环节，只动对应的附件就行，不必重写整个技能。
+
+输出要求里我特意加了三条约束：先给结论再给依据、标明信息的时间范围、不确定的地方必须显式说明。这几条决定了技能产出的结果能不能被直接采信，建议保留；如果场景对格式有额外要求，比如固定的小标题顺序或者必须附来源链接，也可以补在同一段里。
+
+确认内容没有问题后，点击右上角的发布按钮即可提交为官方技能。如果还想补充执行步骤、增加参考资料，或者调整输出格式的要求，直接告诉我，我继续完善。`
     trace = [
       { tool: 'define_skill', connector: '应用引擎', label: '应用引擎 · define_skill()', status: 'ok', ms: 120 },
       { tool: 'build_skill_app', connector: '应用引擎', label: `应用引擎 · build_skill_app(${skillName})`, status: 'ok', ms: 220 },
@@ -309,13 +357,17 @@ function mockAIResponse(message: string, skillId?: string): { content: string; t
       placeholder: '输入消息',
     }
 
-    content = `Agent 应用已经创建好了。
+    content = `Agent 应用已经创建完成，我先搭好了一个可以直接对话测试的界面。
 
-我先搭建了一个可直接测试的对话界面，右侧预览区可以立即输入消息体验；顶部的发布、切换预览和关闭等操作也都保留了。
+右侧预览区输入消息就能立即体验它的回复效果，顶部的发布、切换预览和关闭操作也都保留着，随时可以在配置页和对话页之间来回切换。默认已经按它的定位挂上了几个推荐技能，你可以在配置页里增减，也可以直接改写系统提示词，改完再回到对话页验证效果。
 
-你可以继续告诉我 Agent 的角色、能力或回复风格，我会接着完善。
+需要注意的是，改动系统提示词或技能配置之后，之前的测试记录是基于旧配置产生的，两边混在一起会看不出改动到底有没有生效，建议清空历史后重新测一轮，对比才有意义。
 
-**AgentApp 这样使用：在输入框输入 @ 即可将 Agent App 集成到其他地方！**`
+技能这块的建议是先少后多：先只挂必需的一两个，把主流程跑通，再逐步加。挂得太多时模型容易在选择上摇摆，反而拉低回答的稳定性。
+
+另外，在输入框输入 @ 就能把这个 Agent App 集成到其他对话里使用。集成之后它会带着这里的系统提示词和技能配置一起工作，所以建议先在这里把效果调到满意，再拿出去用。
+
+你可以继续告诉我它的角色、能力边界或回复风格，比如面向谁、遇到不确定的问题怎么处理、回答该给到多细，我接着完善配置。`
     trace = [
       { tool: 'define_agent', connector: '应用引擎', label: '应用引擎 · define_agent()', status: 'ok', ms: 120 },
       { tool: 'build_agent_app', connector: '应用引擎', label: '应用引擎 · build_agent_app(热点探查Agent)', status: 'ok', ms: 240 },
@@ -544,74 +596,15 @@ function mockAIResponse(message: string, skillId?: string): { content: string; t
       footer: { note: W.footer.note, share_url, qr_caption: W.footer.qr_caption },
     }
 
-    content = `## 对外链接页面已准备完成
+    content = `对外链接页面已经准备完成，页面名称为「${W.appName}」，右侧正在生成最终预览。
 
-我已经把当前内容整理成一个可以独立访问的对外网页，页面名称为 **${W.appName}**。右侧正在生成最终预览，你可以先检查内容与展示效果。
+我把原有内容重新整理成了适合外部阅读的结构：保留核心结论、关键数据、分析依据和行动建议，补上页面标题、副标题、摘要和内容分区，并统一了标题层级、正文宽度、段落间距与重点信息样式。较长的段落做了拆分，关键指标单独成块，重点结论加了视觉强调，降低阅读成本。
 
-### 本次完成的内容
+页面已经适配常见桌面浏览器尺寸和手机端纵向阅读，长标题会自动换行，数据卡片会根据屏幕宽度重新排列。外部访问者只能查看内容，无法修改原始页面，链接也不依赖当前会话窗口，可以独立打开。
 
-- 将原有信息重新整理为适合外部阅读的页面结构
-- 保留核心结论、关键数据、分析依据和行动建议
-- 补充页面标题、副标题、摘要和内容分区
-- 统一标题层级、正文宽度、段落间距和重点信息样式
-- 对较长内容进行拆分，避免信息集中在一个大段落中
-- 为关键指标增加独立展示区域，方便快速浏览
-- 为重点结论增加视觉强调，降低阅读理解成本
-- 补齐页面底部说明和来源信息
+原始内容仍然保留在当前 WebApp 里，对外页面是一份独立的只读版本，两边互不影响。之后你继续修改 WebApp 时，线上链接不会被立刻覆盖，需要你确认后再同步。
 
-### 页面展示适配
-
-- 已适配常见桌面浏览器尺寸
-- 已适配手机端纵向阅读
-- 长标题会自动换行，不会遮挡正文
-- 数据卡片会根据屏幕宽度自动调整排列
-- 外部访问者只能查看内容，不能修改原始页面
-- 页面不依赖当前会话窗口，可以通过链接独立打开
-
-### 当前访问设置
-
-- 可访问范围：互联网可见
-- 页面状态：正在制作中
-- 当前版本：首次对外发布版本
-- 原始内容：仍保留在当前 WebApp 中
-- 对外页面：生成后使用独立链接访问
-
-### 为什么需要审核
-
-互联网可见意味着拿到链接的人可以直接访问页面，因此首次生成链接前需要进行一次分享审核。
-
-审核主要用于确认：
-
-- 页面中没有不适合对外展示的业务信息
-- 没有包含个人隐私、内部账号或敏感标识
-- 数据口径与页面描述不存在明显误导
-- 当前申请人具备对外分享该内容的权限
-- 页面访问范围确实需要设置为互联网可见
-
-### 接下来的发布流程
-
-1. 在右侧分享区域点击「去审核」
-2. 填写申请原因并提交审核
-3. 提交后会显示「审核中」并持续转圈
-4. 审核完成后会自动进入「正在发布中」
-5. 系统会依次完成构建、打包和发布
-6. 发布完成后自动生成可复制的线上链接
-
-### 链接生成后
-
-- 可以直接复制链接发送给其他人
-- 访问者打开链接后无需进入当前对话
-- 同一版本会保持稳定的访问地址
-- 页面内容仍以只读方式展示
-- 可以随时切换回企业内可见或部分人可见
-
-### 后续修改与同步
-
-如果之后继续修改 WebApp，线上链接不会立即被覆盖。右侧会出现黄色提示卡片，询问是否把最新修改同步到线上。
-
-确认同步后，系统会重新执行发布流程；发布完成后，原来的链接地址保持不变，但页面内容会更新为最新版本。
-
-你现在可以先在右侧检查页面。如果内容没有问题，就继续提交审核并生成对外链接。`
+你可以先在右侧检查内容与展示效果，重点看三处：结论有没有被断章取义、数据有没有缺少口径说明、有没有不该对外的字段。确认没问题后提交分享审核，审批通过就会生成可复制的线上链接。`
 
     trace = [
       { tool: 'structure_page', connector: '分享引擎', label: '分享引擎 · structure_page()', status: 'run', ms: 0 },
@@ -644,20 +637,17 @@ function mockAIResponse(message: string, skillId?: string): { content: string; t
       insights,
     }
 
-    content = `可以，先按"更清晰、可执行"的方向帮你改成下面这版：
+    content = `WebApp 已经生成，页面名称为「${T.appName}」，右侧可以直接预览。
 
----
+我按“更清晰、可执行”的方向重新组织了内容：顶部是核心指标概览，一眼能看到规模、流量和效率的变化；中间是关键发现，每一条都附上对应的数据依据，而不是只给结论；底部是可落地的改进项，写明具体动作和预期效果。
 
-${T.markdownTop}
-${T.markdownKpis.join('\n')}
+页面上同时标注了数据口径和统计周期，口径没有完全对齐的地方也做了显式提示，避免这份看板被当成完整口径直接对外引用。重点结论加了视觉强调，扫一眼就能定位到问题所在。
 
-**关键发现：**
-${T.markdownInsights.join('\n')}
+指标之间的关系也做了排序：先看规模够不够，再看效率高不高，最后才看单条内容的表现。按这个顺序读，结论不容易被单一指标的波动带偏。
 
-**改进项：**
-${T.markdownImprove.join('\n')}
+如果你要把这份看板拿去汇报，建议再补一段结论的适用范围，说明它基于哪段时间、哪批样本得出，避免被跨周期直接引用。这部分我可以帮你写。
 
-WebApp 已生成，右侧可以直接预览，你想继续改哪个部分？`
+你想先继续调整哪个部分？比如换一组指标、把某条关键发现展开讲透、补充对比周期，或者调整整体配色和排版，都可以直接说。`
     trace = [
       { tool: 'author_profile', connector: '创作者数据', label: '创作者数据 · author_profile()', status: 'run', ms: 0 },
       { tool: 'author_profile', connector: '创作者数据', label: '创作者数据 · author_profile()', status: 'ok', ms: 260 },
@@ -686,6 +676,9 @@ WebApp 已生成，右侧可以直接预览，你想继续改哪个部分？`
     content = `收到你的消息：「${message.slice(0, 50)}${message.length > 50 ? '…' : ''}」\n\n这是一个纯前端演示版本，AI 回答为模拟生成。\n\n在实际部署中，${skillName}会调用后端连接器获取真实数据，产出可溯源的诊断结论。\n\n你可以尝试以下示例：\n- "帮我体检这条作品"\n- "@某作者 最近掉量帮我复盘"\n- "这个作者值不值得培"`
     trace = [{ tool: 'mock_ai', connector: '本地模拟', label: '本地模拟 · mock_ai()', status: 'ok', ms: 15 }]
   }
+
+  const triggersAppBuilder = triggersScriptApp || triggersSkillApp || triggersAgentApp || triggersSharePage || triggersWebApp
+  if (triggersAppBuilder) content = clampSpecialReply(content)
 
   return { content, trace, sources, app_preview }
 }
@@ -922,7 +915,17 @@ export async function streamChat(
     app_preview = previousWebAppForExternalShare
       ? null
       : mockAIResponse('做一个WebApp', skillId).app_preview || null
-    content = `已开始为当前 WebApp 准备对外访问。\n\n访问范围已设置为互联网可见。请先申请分享权限，审批通过后即可生成并复制线上链接。`
+    content = clampSpecialReply(`已开始为当前 WebApp 准备对外访问，访问范围已经设置为互联网可见。
+
+互联网可见意味着拿到链接的人无需登录就能直接打开页面，因此首次生成链接之前需要走一次分享审核，确认页面里没有不适合对外展示的业务信息、个人隐私或内部标识，也确认数据口径与页面描述之间不存在误导。
+
+请先在下方申请分享权限。提交之后会显示审核中，审批通过会自动进入发布流程，依次完成构建、打包和发布，结束后生成一条可复制的线上链接。在链接生成之前，页面仍然只在内部可见，不会有任何外部访问入口。
+
+链接生成后地址是稳定的，同一版本可以反复分享，访问者打开后看到的是只读页面，不会进入当前这个对话。你也可以随时把访问范围切回企业内可见或指定人可见。
+
+如果之后你改了 WebApp，右侧会出现提示卡片，询问是否把最新修改同步到线上；确认后会重新走一遍发布流程，页面内容更新，但链接不用重发。
+
+审批结果出来我会第一时间同步给你。等待期间你可以继续调整页面内容，后续修改再同步到线上版本即可。`)
     trace = [
       { tool: 'prepare_external_access', connector: '分享引擎', label: '分享引擎 · prepare_external_access()', status: 'ok', ms: 180 },
     ]
