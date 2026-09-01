@@ -12,6 +12,7 @@ import { AppsView } from './views/AppsView'
 import { DataOverviewView } from './views/DataOverviewView'
 import { SharePopover } from './components/SharePopover'
 import { ConversationShareView } from './views/ConversationShareView'
+import { ArtifactShareView } from './views/ArtifactShareView'
 import { CONVERSATION_SHARE_OPEN_TASK_KEY, getConversationShareUrl } from './conversationShare'
 import type { Prefs } from './api'
 
@@ -31,7 +32,8 @@ export interface AppState {
 }
 
 export default function App() {
-  if (window.location.hash === '#/share/conversation') return <ConversationShareView />
+  if (window.location.hash.startsWith('#/share/conversation')) return <ConversationShareView />
+  if (window.location.hash.startsWith('#/share/app')) return <ArtifactShareView />
   return (
     <ToastProvider>
       <DialogProvider>

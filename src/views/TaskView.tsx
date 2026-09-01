@@ -9,12 +9,30 @@ import type { AppState } from '../App'
 import type { AppPreview } from '../types'
 import { ensureCreatedSkillInLibrary } from '../skillLibraryStore'
 import { getConversationShareUrl } from '../conversationShare'
+import { FileText, Globe, Robot, Sparkle, Terminal } from '@phosphor-icons/react'
 
 export interface AppPreviewItem {
   id: string
   preview: AppPreview
   messageId: string
   createdAt: number
+}
+
+function appPreviewCardMeta(preview: AppPreview): { title: string; typeLabel: string; icon: JSX.Element; website: boolean } {
+  switch (preview.type) {
+    case 'sharepage':
+      return { title: preview.cover.title || '分享页面', typeLabel: '网页', icon: <Globe size={25} weight="regular" />, website: true }
+    case 'agent':
+      return { title: preview.name || 'Agent 应用', typeLabel: 'Agent', icon: <Robot size={25} weight="regular" />, website: false }
+    case 'skill':
+      return { title: preview.name || 'SkillApp', typeLabel: '技能', icon: <Sparkle size={25} weight="regular" />, website: false }
+    case 'script':
+      return { title: preview.name || 'Script App', typeLabel: '脚本', icon: <Terminal size={25} weight="regular" />, website: false }
+    case 'file':
+      return { title: preview.name || '未命名文件', typeLabel: '文件', icon: <FileText size={25} weight="regular" />, website: false }
+    default:
+      return { title: preview.title || '未命名 WebApp', typeLabel: '网站', icon: <Globe size={25} weight="regular" />, website: true }
+  }
 }
 
 type PermissionLevel = 'L2' | 'L3'
@@ -394,7 +412,7 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
     window.setTimeout(() => send(prompt), 0)
   }
 
-  const externalShareUrl = `https://popagent.example.com/webapp/${taskId || 'demo'}`
+  const externalShareUrl = `${window.location.origin}/#/share/app?name=${encodeURIComponent(taskId || 'popagent-预览')}`
 
   const startExternalLinkGeneration = () => {
     if (externalShareTimerRef.current !== null) window.clearTimeout(externalShareTimerRef.current)
@@ -570,6 +588,25 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
                         </button>
                       )}
                     </div>
+                    {m.app_preview && (() => {
+                      const meta = appPreviewCardMeta(m.app_preview as AppPreview)
+                      const targetApp = apps.find(app => app.messageId === m.id)
+                      return (
+                        <button
+                          type="button"
+                          className="conversation-share-preview-card s-app-preview-card"
+                          onClick={event => {
+                            event.stopPropagation()
+                            if (targetApp) setCurrentAppId(targetApp.id)
+                            setPreviewOpen(true)
+                          }}
+                        >
+                          <span className={'conversation-share-preview-icon' + (meta.website ? ' website-icon' : '')} aria-hidden="true">{meta.icon}</span>
+                          <span className="conversation-share-preview-copy"><strong>{meta.title}</strong><small>{meta.typeLabel}</small></span>
+                          <Icon name="caret-right" cls="ic" />
+                        </button>
+                      )
+                    })()}
                     <div className="s-message-meta" aria-label="消息操作">
                       <time dateTime={m.created_at ? new Date(m.created_at).toISOString() : undefined}>{formatMessageTime(m.created_at)}</time>
                       <button type="button" title="分享消息" aria-label="分享消息" onClick={event => { event.stopPropagation(); enterShareMode(m.id) }}>

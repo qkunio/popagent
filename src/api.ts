@@ -260,6 +260,7 @@ function mockAIResponse(message: string, skillId?: string): { content: string; t
   const triggersSkillApp = /做一个\s*skill(?:\s*app)?/i.test(message)
   const triggersSharePage = /做一个对外(?:链接|连接)/.test(message)
   const triggersWebApp = /做一个\s*web\s*app/i.test(message)
+  const triggersFile = /做一(个|份)文件/.test(message)
   const mentionedPermissionLevels = Array.from(new Set(
     Array.from(message.matchAll(/[Ll]([23])/g), match => `L${match[1]}`),
   )).sort()
@@ -613,6 +614,45 @@ function mockAIResponse(message: string, skillId?: string): { content: string; t
       { tool: 'generate_share_token', connector: '分享引擎', label: '分享引擎 · generate_share_token()', status: 'ok', ms: 180 },
       { tool: 'render_webpage', connector: '分享引擎', label: '分享引擎 · render_webpage(' + W.appName + ')', status: 'ok', ms: 310 },
     ]
+  } else if (triggersFile) {
+    const fileName = 'demo.md'
+    app_preview = {
+      type: 'file',
+      name: fileName,
+      format: 'Markdown',
+      description: '项目说明文件，包含简介、使用方式和示例代码。',
+      content: `# demo.md
+
+这是一份由 XAgent 生成的示例文件，可以直接下载后继续编辑。
+
+## 项目简介
+
+一个用于演示产物预览的最小项目，包含基础的目录结构和一段可运行的示例代码。
+
+## 使用方式
+
+1. 下载本文件到本地
+2. 按下面的示例补齐配置
+3. 运行后即可看到输出
+
+## 示例代码
+
+- 入口文件：\`src/index.ts\`
+- 配置文件：\`config.json\`
+- 输出目录：\`dist/\`
+
+## 备注
+
+内容为演示数据，实际使用时请替换为你自己的项目信息。`,
+    }
+
+    content = `文件已经生成，文件名为「${fileName}」，右侧可以直接预览。
+
+这份文档包含项目简介、使用方式和一段完整的示例代码，打开后可以直接继续编辑。如果需要换成别的格式或者补充章节，告诉我就行。`
+    trace = [
+      { tool: 'draft_outline', connector: '文档引擎', label: '文档引擎 · draft_outline()', status: 'ok', ms: 120 },
+      { tool: 'write_file', connector: '文档引擎', label: `文档引擎 · write_file(${fileName})`, status: 'ok', ms: 180 },
+    ]
   } else if (triggersWebApp) {
     const today = new Date()
     const y0 = today.getFullYear()
@@ -677,7 +717,7 @@ function mockAIResponse(message: string, skillId?: string): { content: string; t
     trace = [{ tool: 'mock_ai', connector: '本地模拟', label: '本地模拟 · mock_ai()', status: 'ok', ms: 15 }]
   }
 
-  const triggersAppBuilder = triggersScriptApp || triggersSkillApp || triggersAgentApp || triggersSharePage || triggersWebApp
+  const triggersAppBuilder = triggersScriptApp || triggersSkillApp || triggersAgentApp || triggersSharePage || triggersWebApp || triggersFile
   if (triggersAppBuilder) content = clampSpecialReply(content)
 
   return { content, trace, sources, app_preview }

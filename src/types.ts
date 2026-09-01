@@ -112,7 +112,15 @@ export interface ScriptAppPreview {
   outputs: Array<{ name: string; type: string; description: string }>
 }
 
-export type AppPreview = KanbanPreview | WebpagePreview | AgentPreview | SkillAppPreview | ScriptAppPreview
+export interface FileAppPreview {
+  type: 'file'
+  name: string
+  format: string
+  description: string
+  content: string
+}
+
+export type AppPreview = KanbanPreview | WebpagePreview | AgentPreview | SkillAppPreview | ScriptAppPreview | FileAppPreview
 
 export interface GeneratedApp {
   id: string
