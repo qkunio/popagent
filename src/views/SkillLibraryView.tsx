@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Check, Share } from 'lucide-react'
 import { Icon } from '../components/Icon'
 import { SkillDetailDialog } from '../components/SkillDetailDialog'
 import { addSkillToLibrary, deleteSkillFromLibrary, toggleLibrarySkillInstalled, useSkillLibrary, type LibrarySkill } from '../skillLibraryStore'
@@ -11,6 +12,12 @@ export function SkillLibraryView({ toast }: { toast: (message: string) => void }
   const [query, setQuery] = useState('')
   const [menuSkillId, setMenuSkillId] = useState<string | null>(null)
   const [detailSkill, setDetailSkill] = useState<LibrarySkill | null>(null)
+  const [copiedSkillId, setCopiedSkillId] = useState<string | null>(null)
+  const copiedResetTimerRef = useRef<number | null>(null)
+
+  useEffect(() => () => {
+    if (copiedResetTimerRef.current !== null) window.clearTimeout(copiedResetTimerRef.current)
+  }, [])
 
   const counts = useMemo(() => ({
     all: skills.length,
@@ -31,6 +38,20 @@ export function SkillLibraryView({ toast }: { toast: (message: string) => void }
     const removing = Boolean(skill.installed)
     toggleLibrarySkillInstalled(skill.id)
     toast(removing ? `已移除 ${skill.name}` : `已添加 ${skill.name}`)
+  }
+
+  const shareSkill = async (skill: LibrarySkill) => {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      setCopiedSkillId(skill.id)
+      if (copiedResetTimerRef.current !== null) window.clearTimeout(copiedResetTimerRef.current)
+      copiedResetTimerRef.current = window.setTimeout(() => {
+        setCopiedSkillId(current => current === skill.id ? null : current)
+        copiedResetTimerRef.current = null
+      }, 1800)
+    } catch {
+      toast('复制失败')
+    }
   }
 
   return (
@@ -71,7 +92,18 @@ export function SkillLibraryView({ toast }: { toast: (message: string) => void }
                   <article className="skill-library-card clickable" key={skill.id} role="button" tabIndex={0} onClick={() => setDetailSkill(skill)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') setDetailSkill(skill) }}>
                     <div className="skill-card-title-row">
                       <h3 title={skill.name}>{skill.name}</h3>
-                      <span className="skill-kind">Skill</span>
+                      <div className="skill-card-meta">
+                        {skill.owner === 'mine' ? (
+                          <div className="skill-share-anchor">
+                            {copiedSkillId === skill.id && <span className="skill-share-tip" role="status">链接已复制</span>}
+                            <button type="button" className="skill-share-button" onClick={event => { event.stopPropagation(); void shareSkill(skill) }}>
+                              {copiedSkillId === skill.id ? <Check aria-hidden="true" /> : <Share aria-hidden="true" />}分享
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="skill-kind">Skill</span>
+                        )}
+                      </div>
                     </div>
                     <p>{skill.description}</p>
                     <footer>

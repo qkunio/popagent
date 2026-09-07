@@ -11,6 +11,7 @@ import { SkillLibraryView } from './views/SkillLibraryView'
 import { AppsView } from './views/AppsView'
 import { DataOverviewView } from './views/DataOverviewView'
 import { SharePopover } from './components/SharePopover'
+import { MemoryDialog } from './components/MemoryDialog'
 import { ConversationShareView } from './views/ConversationShareView'
 import { ArtifactShareView } from './views/ArtifactShareView'
 import { CONVERSATION_SHARE_OPEN_TASK_KEY, getConversationShareUrl } from './conversationShare'
@@ -43,6 +44,28 @@ export default function App() {
   )
 }
 
+interface Project { id: string; name: string }
+
+const DEFAULT_PROJECT: Project = { id: 'p_default', name: '默认项目' }
+const PROJECTS_KEY = 'popagent-projects'
+const TASK_PROJECT_KEY = 'popagent-task-project'
+
+const loadProjects = (): Project[] => {
+  try {
+    const raw = localStorage.getItem(PROJECTS_KEY)
+    const parsed = raw ? JSON.parse(raw) : null
+    return Array.isArray(parsed) ? parsed : []
+  } catch { return [] }
+}
+
+const loadTaskProject = (): Record<string, string> => {
+  try {
+    const raw = localStorage.getItem(TASK_PROJECT_KEY)
+    const parsed = raw ? JSON.parse(raw) : null
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch { return {} }
+}
+
 function Shell() {
   const [view, setView] = useState<ViewName>('home')
   const [skills, setSkills] = useState<Skill[]>([])
@@ -56,6 +79,11 @@ function Shell() {
   const [sidebarActionAnchor, setSidebarActionAnchor] = useState<HTMLButtonElement | null>(null)
   const sidebarActionAnchorRef = { current: sidebarActionAnchor }
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('popagent-theme') as 'light' | 'dark') || 'light')
+  const [memoryOpen, setMemoryOpen] = useState(false)
+  const [projects, setProjects] = useState<Project[]>(loadProjects)
+  const [taskProject, setTaskProject] = useState<Record<string, string>>(loadTaskProject)
+  const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>({})
+  const [moveMenu, setMoveMenu] = useState<{ task: SidebarTask; top: number; left: number } | null>(null)
   const [me, setMe] = useState<{ name: string; role: string; avatar?: string; authenticated?: boolean } | null>(null)
   const [prefs, setPrefs] = useState<Prefs | null>(null)
   const toast = useToast()
@@ -126,6 +154,25 @@ function Shell() {
     } catch { toast('重命名失败') }
   }
 
+  useEffect(() => { localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects)) }, [projects])
+  useEffect(() => { localStorage.setItem(TASK_PROJECT_KEY, JSON.stringify(taskProject)) }, [taskProject])
+
+  const createProject = async () => {
+    const name = await dialog.prompt({ title: '新建项目', placeholder: '项目名称', okText: '创建' })
+    if (!name) return
+    setProjects(list => [...list, { id: 'p_' + Date.now().toString(36), name }])
+    toast(`项目「${name}」已创建`)
+  }
+
+  const moveTaskToProject = (task: SidebarTask, projectId: string) => {
+    setTaskProject(map => ({ ...map, [task.id]: projectId }))
+    setMoveMenu(null)
+    setSidebarMenu(null)
+    toast(`已移动到「${projects.find(p => p.id === projectId)?.name || DEFAULT_PROJECT.name}」`)
+  }
+
+  const allProjects = [DEFAULT_PROJECT, ...projects]
+
   const state: AppState = {
     skills, connectors, sidebar, refreshSidebar, go, openTask,
     activeTaskId, setActiveTaskId,
@@ -149,7 +196,6 @@ function Shell() {
             { label: '技能库', icon: 'folders', view: 'skills' as ViewName },
             { label: '应用', icon: 'squares-four', view: 'apps' as ViewName },
             { label: '数据', icon: 'database', view: 'data' as ViewName },
-            { label: '服务', icon: 'cloud', view: null },
           ].map(item => (
             <button
               type="button"
@@ -172,8 +218,28 @@ function Shell() {
 
         <div className="tlp">
           <div className="tlp-scroll">
-          <div className="tlp-caption">会话列表</div>
-          {sidebar.map(t => (
+          <div className="tlp-caption tlp-caption-row">
+            <span>项目</span>
+            <button type="button" className="tlp-add" aria-label="新建项目" title="新建项目" onClick={createProject}>
+              <Icon name="plus" cls="ic-s ic" />
+            </button>
+          </div>
+          {allProjects.map(project => {
+            const items = sidebar.filter(t => (taskProject[t.id] || DEFAULT_PROJECT.id) === project.id)
+            const collapsed = Boolean(collapsedProjects[project.id])
+            return (
+              <div className="pgroup" key={project.id}>
+                <button
+                  type="button"
+                  className="pgroup-head"
+                  aria-expanded={!collapsed}
+                  onClick={() => setCollapsedProjects(map => ({ ...map, [project.id]: !collapsed }))}
+                >
+                  <Icon name={collapsed ? 'caret-right' : 'caret-down'} cls="ic-s ic pgroup-caret" />
+                  <span className="pgroup-name">{project.name}</span>
+                  <span className="pgroup-count">({items.length})</span>
+                </button>
+                {!collapsed && items.map(t => (
             <div key={t.id} className={'frow frow-row' + (activeTaskId === t.id && view === 'task' ? ' on' : '')} onClick={() => openTask(t.id)}>
               <span className={'fdot' + (t.dot ? ' ' + t.dot : '')} /><span className="ftx">{t.title}</span>
               <button
@@ -206,12 +272,15 @@ function Shell() {
                   title="取消置顶"
                   onClick={e => { e.stopPropagation(); toggleSidebarPin(t) }}
                 >
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3.5h8l-1 5 3.5 3.5v1.5h-6V21l-1-1-1-6.5h-6V12L8 8.5l-1-5Z" /></svg>
+                  <Icon name="pin" cls="ic" />
                 </button>
               )}
             </div>
-          ))}
-          {sidebar.length === 0 && <div className="frow-empty">还没有对话</div>}
+                ))}
+                {!collapsed && items.length === 0 && <div className="frow-empty">还没有对话</div>}
+              </div>
+            )
+          })}
           </div>
         </div>
 
@@ -220,17 +289,28 @@ function Shell() {
             <button type="button" className="chat-more-dismiss" aria-label="关闭菜单" onClick={() => setSidebarMenu(null)} />
             <div className="chat-more-menu sidebar-chat-more-menu" role="menu" style={{ top: sidebarMenu.top, left: sidebarMenu.left }}>
               <button type="button" role="menuitem" onClick={() => toggleSidebarPin(sidebarMenu.task)}>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3.5h8l-1 5 3.5 3.5v1.5h-6V21l-1-1-1-6.5h-6V12L8 8.5l-1-5Z" /></svg>
+                <Icon name="pin" cls="ic" />
                 <span>{sidebarMenu.task.pinned ? '取消置顶' : '置顶'}</span>
               </button>
               <button type="button" role="menuitem" onClick={() => { setSidebarShareTask(sidebarMenu.task); setSidebarMenu(null) }}>
                 <Icon name="share-fat" cls="ic" /><span>分享</span>
               </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={e => {
+                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                  setMoveMenu({ task: sidebarMenu.task, top: rect.top, left: Math.min(rect.right + 6, window.innerWidth - 184) })
+                  setSidebarMenu(null)
+                }}
+              >
+                <Icon name="folder" cls="ic" /><span>移动到项目</span>
+              </button>
               <button type="button" role="menuitem" onClick={() => renameSidebarTask(sidebarMenu.task)}>
                 <Icon name="pencil-simple" cls="ic" /><span>重命名</span>
               </button>
               <button type="button" role="menuitem" className="danger" onClick={() => { const task = sidebarMenu.task; setSidebarMenu(null); deleteTask(task.id, task.title) }}>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7.5h15M9 4.5h6l1 3H8l1-3Zm-2 3 .8 12h8.4l.8-12M10 11v5M14 11v5" /></svg>
+                <Icon name="trash" cls="ic" />
                 <span>删除</span>
               </button>
             </div>
@@ -260,6 +340,10 @@ function Shell() {
                   <span className={'acct-switch' + (theme === 'dark' ? ' on' : '')} />
                 </div>
                 <div className="acct-sep" />
+                <div className="acct-item" onClick={() => { setAcctOpen(false); setMemoryOpen(true) }}>
+                  <Icon name="brain" cls="ic" />记忆
+                </div>
+                <div className="acct-sep" />
                 <div className="acct-item" onClick={() => { setAcctOpen(false); toast('纯前端演示版本，无需登录') }}>
                   <Icon name="export" cls="ic" />关于
                 </div>
@@ -267,6 +351,26 @@ function Shell() {
             </>
           )}
         </div>
+        {moveMenu && createPortal((
+          <>
+            <button type="button" className="chat-more-dismiss" aria-label="关闭菜单" onClick={() => setMoveMenu(null)} />
+            <div className="chat-more-menu sidebar-chat-more-menu" role="menu" style={{ top: moveMenu.top, left: moveMenu.left }}>
+              {allProjects.map(project => (
+                <button
+                  key={project.id}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => moveTaskToProject(moveMenu.task, project.id)}
+                >
+                  <Icon name={(taskProject[moveMenu.task.id] || DEFAULT_PROJECT.id) === project.id ? 'check' : 'folder'} cls="ic" />
+                  <span>{project.name}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        ), document.body)}
+
+        <MemoryDialog open={memoryOpen} onClose={() => setMemoryOpen(false)} toast={toast} />
         <div className="vresize rail-rs" data-rs="rail" aria-label="拖拽调整侧栏宽度" />
       </aside>
 

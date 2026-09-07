@@ -356,10 +356,7 @@ function AgentTestPreview({
           <article className="agent-business-card">
             <header className="agent-business-head">
               <span className="agent-business-icon-ring" aria-hidden="true">
-                <svg className="agent-bot-icon agent-business-bot-icon" viewBox="0 0 24 24">
-                  <path d="M8 7h8a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3v-6a3 3 0 0 1 3-3Z" />
-                  <path d="M12 4v3M9 12h.01M15 12h.01M9 16h6M3 12h2M19 12h2" />
-                </svg>
+                <Icon name="bot" cls="agent-bot-icon agent-business-bot-icon" />
               </span>
               <h1>{data.name}</h1>
             </header>
@@ -526,10 +523,7 @@ function AgentTestPreview({
               </section>
             )}
           </div>
-          <svg className="agent-bot-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M8 7h8a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3v-6a3 3 0 0 1 3-3Z" />
-            <path d="M12 4v3M9 12h.01M15 12h.01M9 16h6M3 12h2M19 12h2" />
-          </svg>
+          <Icon name="bot" cls="agent-bot-icon" />
           <span>{data.name}</span>
         </div>
         <div className="agent-clear-anchor" ref={clearAnchorRef}>
@@ -541,12 +535,7 @@ function AgentTestPreview({
             aria-expanded={clearConfirmOpen}
             onClick={requestClearMessages}
           >
-            <svg className="agent-brush-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M10 11V4.5a2 2 0 0 1 4 0V11" />
-              <path d="M6.7 11h10.6l2.5 4H4.2l2.5-4Z" />
-              <path d="M5 15v2.2c0 1.6-.6 2.8-1.5 3.8h17c-.9-1-1.5-2.2-1.5-3.8V15" />
-              <path d="m8.2 17.5-.3 3.3M12 17.5v3.3M15.8 17.5l.3 3.3" />
-            </svg>
+            <Icon name="paintbrush" cls="agent-brush-icon" />
           </button>
           {clearConfirmOpen && (
             <section className="agent-clear-popover" role="dialog" aria-labelledby="agent-clear-title">
