@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Icon } from '../components/Icon'
 import { api } from '../api'
 import { CONVERSATION_SHARE_OPEN_TASK_KEY } from '../conversationShare'
-import { DownloadSimple, FileText, FrameCorners, Globe } from '@phosphor-icons/react'
+import { Download, FileText, Globe, Maximize2 } from 'lucide-react'
 
 const SHARED_MESSAGES = [
   { role: 'user', text: '做一个 demo.md' },
@@ -66,20 +66,20 @@ export function ConversationShareView() {
                 </div>
               </article>
               {index === 1 && <button type="button" className="conversation-share-preview-card" onClick={() => { setPreviewKind('file'); setPreviewApp(previewApp === 'demo-md' ? null : 'demo-md') }}>
-                <span className="conversation-share-preview-icon" aria-hidden="true"><FileText size={25} weight="regular" /></span>
+                <span className="conversation-share-preview-icon" aria-hidden="true"><FileText size={25} /></span>
                 <span className="conversation-share-preview-copy"><strong>demo.md</strong><small>文件</small></span>
                 <Icon name="caret-right" cls="ic" />
               </button>}
               {index === 3 && <button type="button" className="conversation-share-preview-card" onClick={() => { setPreviewKind('website'); setPreviewApp(previewApp === 'popagent' ? null : 'popagent') }}>
-                <span className="conversation-share-preview-icon website-icon" aria-hidden="true"><Globe size={25} weight="regular" /></span>
+                <span className="conversation-share-preview-icon website-icon" aria-hidden="true"><Globe size={25} /></span>
                 <span className="conversation-share-preview-copy"><strong>popagent 预览</strong><small>网站</small></span>
                 <Icon name="caret-right" cls="ic" />
               </button>}
               {index === 5 && <button type="button" className="conversation-share-preview-card" onClick={() => { setPreviewKind('file'); setPreviewApp('project-readme') }}>
-                <span className="conversation-share-preview-icon" aria-hidden="true"><FileText size={25} weight="regular" /></span><span className="conversation-share-preview-copy"><strong>项目说明.md</strong><small>文件</small></span><Icon name="caret-right" cls="ic" />
+                <span className="conversation-share-preview-icon" aria-hidden="true"><FileText size={25} /></span><span className="conversation-share-preview-copy"><strong>项目说明.md</strong><small>文件</small></span><Icon name="caret-right" cls="ic" />
               </button>}
               {index === 7 && <button type="button" className="conversation-share-preview-card" onClick={() => { setPreviewKind('website'); setPreviewApp('insight') }}>
-                <span className="conversation-share-preview-icon website-icon" aria-hidden="true"><Globe size={25} weight="regular" /></span><span className="conversation-share-preview-copy"><strong>数据看板预览</strong><small>网站</small></span><Icon name="caret-right" cls="ic" />
+                <span className="conversation-share-preview-icon website-icon" aria-hidden="true"><Globe size={25} /></span><span className="conversation-share-preview-copy"><strong>数据看板预览</strong><small>网站</small></span><Icon name="caret-right" cls="ic" />
               </button>}
             </div>
           ))}
@@ -92,7 +92,7 @@ export function ConversationShareView() {
             {appMenuOpen && <div className="conversation-share-app-menu" role="listbox"><div className="conversation-share-app-caption">{previewKind === 'file' ? '文件' : '网站'}</div>{activeApps.map(app => <button type="button" role="option" aria-selected={app.id === selectedPreview.id} className={app.id === selectedPreview.id ? 'on' : ''} key={app.id} onClick={() => { setPreviewApp(app.id); setAppMenuOpen(false) }}>{app.name}</button>)}</div>}
             <div className="conversation-share-preview-actions">
               <button type="button" aria-label={previewKind === 'file' ? '下载文件' : '全屏查看'} title={previewKind === 'file' ? '下载' : '全屏查看'} onClick={previewKind === 'file' ? downloadFile : () => window.open(window.location.href, '_blank')}>
-                {previewKind === 'file' ? <DownloadSimple size={18} weight="regular" /> : <FrameCorners size={18} weight="regular" />}
+                {previewKind === 'file' ? <Download size={18} /> : <Maximize2 size={18} />}
               </button>
               <button type="button" aria-label="收起分栏" title="收起分栏" onClick={() => setPreviewApp(null)}><Icon name="columns" cls="ic" /></button>
             </div>

@@ -9,7 +9,7 @@ import type { AppState } from '../App'
 import type { AppPreview } from '../types'
 import { ensureCreatedSkillInLibrary } from '../skillLibraryStore'
 import { getConversationShareUrl } from '../conversationShare'
-import { FileText, Globe, Robot, Sparkle, Terminal } from '@phosphor-icons/react'
+import { Bot, FileText, Globe, Sparkles, Terminal } from 'lucide-react'
 
 export interface AppPreviewItem {
   id: string
@@ -21,32 +21,57 @@ export interface AppPreviewItem {
 function appPreviewCardMeta(preview: AppPreview): { title: string; typeLabel: string; icon: JSX.Element; website: boolean } {
   switch (preview.type) {
     case 'sharepage':
-      return { title: preview.cover.title || '分享页面', typeLabel: '网页', icon: <Globe size={25} weight="regular" />, website: true }
+      return { title: preview.cover.title || '分享页面', typeLabel: '网页', icon: <Globe size={25} />, website: true }
     case 'agent':
-      return { title: preview.name || 'Agent 应用', typeLabel: 'Agent', icon: <Robot size={25} weight="regular" />, website: false }
+      return { title: preview.name || 'Agent 应用', typeLabel: 'Agent', icon: <Bot size={25} />, website: false }
     case 'skill':
-      return { title: preview.name || 'SkillApp', typeLabel: '技能', icon: <Sparkle size={25} weight="regular" />, website: false }
+      return { title: preview.name || 'SkillApp', typeLabel: '技能', icon: <Sparkles size={25} />, website: false }
     case 'script':
-      return { title: preview.name || 'Script App', typeLabel: '脚本', icon: <Terminal size={25} weight="regular" />, website: false }
+      return { title: preview.name || 'Script App', typeLabel: '脚本', icon: <Terminal size={25} />, website: false }
     case 'file':
-      return { title: preview.name || '未命名文件', typeLabel: '文件', icon: <FileText size={25} weight="regular" />, website: false }
+      return { title: preview.name || '未命名文件', typeLabel: '文件', icon: <FileText size={25} />, website: false }
     default:
-      return { title: preview.title || '未命名 WebApp', typeLabel: '网站', icon: <Globe size={25} weight="regular" />, website: true }
+      return { title: preview.title || '未命名 WebApp', typeLabel: '网站', icon: <Globe size={25} />, website: true }
   }
 }
 
 type PermissionLevel = 'L2' | 'L3'
 type ExternalShareStatus = 'idle' | 'applying' | 'approved' | 'generating' | 'generated'
 
-const PERMISSION_LEVEL_DETAILS: Record<PermissionLevel, { method: string; domains: string[] }> = {
+const PERMISSION_LEVEL_DETAILS: Record<PermissionLevel, {
+  method: string
+  domains: string[]
+  fieldGroups: { entity: string; fields: string[] }[]
+}> = {
   L2: {
     method: '告知 +1',
     domains: ['作者-播放数据', '作品-互动数据', '粉丝-画像数据'],
+    fieldGroups: [
+      { entity: '作者', fields: ['活跃粉丝', '平均播放量', '评论量'] },
+      { entity: '作品', fields: ['累计评论量', '点赞量'] },
+    ],
   },
   L3: {
     method: '向 +1 申请',
     domains: ['作者-收入数据', '作品-分发数据', '账号-运营数据'],
+    fieldGroups: [
+      { entity: '作者', fields: ['运营垂类', '质量等级', '二确状态'] },
+      { entity: '作品', fields: ['广告状态', '版权风险'] },
+      { entity: '格子', fields: ['格子名称'] },
+    ],
   },
+}
+
+function permissionFieldGroups(levels: PermissionLevel[]) {
+  const groups: { entity: string; fields: string[] }[] = []
+  for (const level of levels) {
+    for (const group of PERMISSION_LEVEL_DETAILS[level].fieldGroups) {
+      const existing = groups.find(item => item.entity === group.entity)
+      if (existing) existing.fields = Array.from(new Set([...existing.fields, ...group.fields]))
+      else groups.push({ entity: group.entity, fields: [...group.fields] })
+    }
+  }
+  return groups
 }
 
 export function TaskView({ state, taskId }: { state: AppState; taskId: string | null }) {
@@ -580,13 +605,36 @@ export function TaskView({ state, taskId }: { state: AppState; taskId: string | 
                   <div className="s-body">
                     <div className="s-bubble">
                       <Markdown text={m.content} />
-                      {permissionLevels && (
-                        <button type="button" className="s-permission-request-button" onClick={() => openPermissionRequest(permissionLevels, m.id)}>
-                          <Icon name="lock" cls="ic" />
-                          <span>申请 {permissionLevels.join('、')} 数据权限</span>
-                          <Icon name="arrow-right" cls="ic arrow" />
-                        </button>
-                      )}
+                      {permissionLevels && (() => {
+                        const groups = permissionFieldGroups(permissionLevels)
+                        const fieldCount = groups.reduce((total, group) => total + group.fields.length, 0)
+                        return (
+                          <section className="s-permission-card" aria-label="需要申请的数据权限">
+                            <header>
+                              <span className="s-permission-lock"><Icon name="lock" cls="ic" /></span>
+                              <h3>{fieldCount} 个字段需要申请权限</h3>
+                            </header>
+                            <div className="s-permission-groups">
+                              {groups.map(group => (
+                                <div className="s-permission-group" key={group.entity}>
+                                  <span className="s-permission-entity">{group.entity}</span>
+                                  <div className="s-permission-chips">
+                                    {group.fields.map(field => <span key={field}>{field}</span>)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <footer>
+                              <button type="button" className="s-permission-primary" onClick={() => openPermissionRequest(permissionLevels, m.id)}>
+                                申请权限<Icon name="export" cls="ic-s ic" />
+                              </button>
+                              <button type="button" className="s-permission-secondary" onClick={() => send(`${permissionLevels.join('、')} 权限通过了，请你继续`)}>
+                                我已申请，重试
+                              </button>
+                            </footer>
+                          </section>
+                        )
+                      })()}
                     </div>
                     {m.app_preview && (() => {
                       const meta = appPreviewCardMeta(m.app_preview as AppPreview)

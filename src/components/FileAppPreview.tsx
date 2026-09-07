@@ -1,4 +1,4 @@
-import { DownloadSimple } from '@phosphor-icons/react'
+import { Download } from 'lucide-react'
 import { Markdown } from './Markdown'
 import type { FileAppPreview as FileAppPreviewData } from '../types'
 
@@ -20,7 +20,7 @@ export function FileAppPreview({ data }: { data: FileAppPreviewData }) {
           <span>{data.format}</span>
         </div>
         <button type="button" className="kb-file-download" onClick={download}>
-          <DownloadSimple size={15} weight="regular" />
+          <Download size={15} />
           <span>下载</span>
         </button>
       </div>

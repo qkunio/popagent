@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Globe, Sparkle } from '@phosphor-icons/react'
+import { Globe, Sparkles } from 'lucide-react'
 import { api } from '../api'
 import { CONVERSATION_SHARE_OPEN_TASK_KEY } from '../conversationShare'
 
@@ -31,7 +31,7 @@ export function ArtifactShareView() {
               <span className="conversation-share-avatar">X</span>
               <span>来自 <strong>XAgent</strong></span>
               <button type="button" className="artifact-share-remix-btn" onClick={makeRemix} disabled={creatingRemix}>
-                <Sparkle size={14} weight="fill" />
+                <Sparkles size={14} />
                 <span>{creatingRemix ? '正在创建…' : '做同款'}</span>
               </button>
             </div>
