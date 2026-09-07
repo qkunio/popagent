@@ -14,6 +14,12 @@ const STORE_KEY = 'popagent-memory-doc'
 const STORE_ENABLED_KEY = 'popagent-memories-enabled'
 const STORE_TIME_KEY = 'popagent-memory-updated'
 
+/** 项目记忆和个人记忆共用这套弹窗，只是各自存各自的 key，且项目记忆没有导入 */
+export interface MemoryScope { id: string; name: string }
+const keysFor = (scope?: MemoryScope) => scope
+  ? { doc: `${STORE_KEY}:${scope.id}`, enabled: `${STORE_ENABLED_KEY}:${scope.id}`, time: `${STORE_TIME_KEY}:${scope.id}` }
+  : { doc: STORE_KEY, enabled: STORE_ENABLED_KEY, time: STORE_TIME_KEY }
+
 const SEED_DOC = [
   '## 用户信息',
   '',
@@ -67,10 +73,17 @@ const relativeTime = (ts: number) => {
   return `${Math.floor(diff / (24 * HOUR))} 天前更新`
 }
 
-export function MemoryDialog({ open, onClose, toast }: { open: boolean; onClose: () => void; toast?: (m: string) => void }) {
-  const [enabled, setEnabled] = useState(() => localStorage.getItem(STORE_ENABLED_KEY) !== 'off')
-  const [doc, setDoc] = useState(() => localStorage.getItem(STORE_KEY) ?? SEED_DOC)
-  const [updatedAt, setUpdatedAt] = useState(() => Number(localStorage.getItem(STORE_TIME_KEY)) || Date.now() - 21 * MIN)
+export function MemoryDialog({ open, onClose, toast, scope }: {
+  open: boolean
+  onClose: () => void
+  toast?: (m: string) => void
+  /** 传入则是项目记忆：标题、文案独立存储，且不提供导入 */
+  scope?: MemoryScope
+}) {
+  const keys = keysFor(scope)
+  const [enabled, setEnabled] = useState(() => localStorage.getItem(keys.enabled) !== 'off')
+  const [doc, setDoc] = useState(() => localStorage.getItem(keys.doc) ?? (scope ? '' : SEED_DOC))
+  const [updatedAt, setUpdatedAt] = useState(() => Number(localStorage.getItem(keys.time)) || Date.now() - 21 * MIN)
   const [saved, setSaved] = useState(doc)
   const [editing, setEditing] = useState(false)
   // 失焦时的二次确认：closeAfter 表示确认完还要顺手把整个记忆弹窗关掉
@@ -80,8 +93,22 @@ export function MemoryDialog({ open, onClose, toast }: { open: boolean; onClose:
   const [copied, setCopied] = useState(false)
   const [importPending, setImportPending] = useState(false)
   const editorRef = useRef<HTMLTextAreaElement>(null)
+  // 打开瞬间的那次点击不应该穿透成「进入编辑」
+  const openedAt = useRef(0)
+  // 当前 doc/saved 是从哪个 key 载入的：scope 切换后不能拿旧内容去覆盖新 key
+  const loadedKey = useRef(keys.doc)
 
-  useEffect(() => { localStorage.setItem(STORE_ENABLED_KEY, enabled ? 'on' : 'off') }, [enabled])
+  useEffect(() => {
+    if (!open) return
+    const next = localStorage.getItem(keys.doc) ?? (scope ? '' : SEED_DOC)
+    loadedKey.current = keys.doc
+    setDoc(next)
+    setSaved(next)
+    setEnabled(localStorage.getItem(keys.enabled) !== 'off')
+    setUpdatedAt(Number(localStorage.getItem(keys.time)) || Date.now() - 21 * MIN)
+  }, [open, keys.doc, keys.enabled, keys.time])
+
+  useEffect(() => { localStorage.setItem(keys.enabled, enabled ? 'on' : 'off') }, [enabled, keys.enabled])
 
   const dirty = doc.trim() !== saved.trim()
 
@@ -89,18 +116,22 @@ export function MemoryDialog({ open, onClose, toast }: { open: boolean; onClose:
     setEditing(false)
     setAskSave(null)
     const next = doc.trim()
-    if (next === saved.trim()) return
+    if (next === saved.trim() || loadedKey.current !== keys.doc) return
     const now = Date.now()
     setSaved(next)
     setUpdatedAt(now)
-    localStorage.setItem(STORE_KEY, next)
-    localStorage.setItem(STORE_TIME_KEY, String(now))
+    localStorage.setItem(keys.doc, next)
+    localStorage.setItem(keys.time, String(now))
     toast?.('记忆已更新')
   }
 
   const cancelEdit = () => { setDoc(saved); setEditing(false); setAskSave(null) }
 
-  const startEdit = () => { setEditing(true); requestAnimationFrame(() => editorRef.current?.focus()) }
+  const startEdit = () => {
+    if (Date.now() - openedAt.current < 300) return
+    setEditing(true)
+    requestAnimationFrame(() => editorRef.current?.focus())
+  }
 
   // 编辑态下失焦：点到取消/保存按钮上不打扰，其它情况有改动就问一句
   const onEditorBlur = (event: React.FocusEvent<HTMLTextAreaElement>) => {
@@ -133,7 +164,7 @@ export function MemoryDialog({ open, onClose, toast }: { open: boolean; onClose:
   // demo：导入放到「后台」跑，用户可以直接关窗，跑完再把内容并进记忆
   const confirmImport = () => {
     const pasted = importText.trim()
-    if (!pasted || importPending) return
+    if (!pasted || importPending || loadedKey.current !== keys.doc) return
     setImportPending(true)
     window.setTimeout(() => {
       setSaved(current => {
@@ -141,8 +172,8 @@ export function MemoryDialog({ open, onClose, toast }: { open: boolean; onClose:
         const now = Date.now()
         setDoc(next)
         setUpdatedAt(now)
-        localStorage.setItem(STORE_KEY, next)
-        localStorage.setItem(STORE_TIME_KEY, String(now))
+        localStorage.setItem(keys.doc, next)
+        localStorage.setItem(keys.time, String(now))
         return next
       })
       setImportPending(false)
@@ -155,6 +186,7 @@ export function MemoryDialog({ open, onClose, toast }: { open: boolean; onClose:
   // 打开时回到预览态
   useEffect(() => {
     if (!open) return
+    openedAt.current = Date.now()
     setEditing(false)
     setAskSave(null)
     setImporting(false)
@@ -176,12 +208,16 @@ export function MemoryDialog({ open, onClose, toast }: { open: boolean; onClose:
     <div className="mem-overlay" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) requestClose() }}>
       <section className="mem-dialog" role="dialog" aria-modal="true" aria-labelledby="mem-title">
         <header className="mem-head">
-          <h2 id="mem-title">记忆</h2>
+          <h2 id="mem-title">{scope ? '项目记忆' : '记忆'}</h2>
           <button type="button" className="mem-close" aria-label="关闭记忆" onMouseDown={e => { e.preventDefault(); requestClose() }}><Icon name="x" cls="ic" /></button>
         </header>
 
         <div className="mem-body">
-          <p className="mem-sub">记忆让 Xagent 记住你的偏好和习惯，对话越多，它就越懂你。记忆仅你本人可见。</p>
+          <p className="mem-sub">
+            {scope
+              ? `记忆让 Xagent 记住「${scope.name}」的背景和约定，项目内的对话都会参考它。`
+              : '记忆让 Xagent 记住你的偏好和习惯，对话越多，它就越懂你。记忆仅你本人可见。'}
+          </p>
 
           <div className="mem-switch-card">
             <span className="mem-switch-label">生成对话记忆</span>
@@ -208,7 +244,7 @@ export function MemoryDialog({ open, onClose, toast }: { open: boolean; onClose:
                       <button type="button" className="mem-btn" onClick={cancelEdit}>取消</button>
                       <button type="button" className="mem-btn primary" onClick={commit}>保存</button>
                     </>
-                  ) : (
+                  ) : scope ? null : (
                     <button type="button" className="mem-btn" onClick={openImport}>导入</button>
                   )}
                 </div>
@@ -220,7 +256,9 @@ export function MemoryDialog({ open, onClose, toast }: { open: boolean; onClose:
                   className="mem-editor"
                   value={doc}
                   spellCheck={false}
-                  placeholder={'用 markdown 写下你想让 Xagent 记住的事，例如：\n\n## 用户信息\n\n- 不吃香菜'}
+                  placeholder={scope
+                    ? `用 markdown 写下「${scope.name}」的背景和约定，例如：\n\n## 项目背景\n\n- 目标人群是新手作者`
+                    : '用 markdown 写下你想让 Xagent 记住的事，例如：\n\n## 用户信息\n\n- 不吃香菜'}
                   onChange={e => setDoc(e.target.value)}
                   onBlur={onEditorBlur}
                   onKeyDown={e => {
@@ -240,7 +278,12 @@ export function MemoryDialog({ open, onClose, toast }: { open: boolean; onClose:
                 >
                   {doc.trim()
                     ? <Markdown text={doc} />
-                    : <div className="mem-doc-empty">还没有记忆，点这里用 markdown 写下你想让 Xagent 记住的事。</div>}
+                    : (
+                      <div className="mem-doc-empty">
+                        <span className="mem-doc-empty-ic" aria-hidden="true"><Icon name="plus" cls="ic" /></span>
+                        <span>{scope ? '还没有项目记忆，点击添加' : '还没有记忆，点击添加'}</span>
+                      </div>
+                    )}
                 </div>
               )}
             </div>

@@ -6366,12 +6366,15 @@ html[data-theme="dark"] .sh-popover {
 .mem-btn:disabled { opacity: .5; cursor: not-allowed; }
 .mem-btn.primary:disabled:hover { background: var(--btn); }
 
-.mem-doc { flex: 1; min-height: 240px; overflow-y: auto; margin-top: 14px; padding: 10px 16px 14px; border: 1px solid transparent; border-radius: 10px; background: var(--panel-soft); cursor: text; transition: background .12s, border-color .12s; }
+.mem-doc { flex: 1; display: flex; flex-direction: column; min-height: 240px; overflow-y: auto; margin-top: 14px; padding: 10px 16px 14px; border: 1px solid transparent; border-radius: 10px; background: var(--panel-soft); cursor: text; transition: background .12s, border-color .12s; }
 .mem-doc:hover { background: var(--panel); border-color: var(--line); }
 .mem-doc:focus-visible { outline: none; background: var(--panel); border-color: var(--acc); box-shadow: var(--focus); }
 .mem-doc .prose { font-size: 13px; line-height: 1.8; color: var(--body); }
 .mem-doc .prose h4, .mem-doc .prose h5 { margin-top: 14px; }
-.mem-doc-empty { padding: 24px 0 28px; text-align: center; font-size: 13px; color: var(--faint); }
+.mem-doc-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px 0; text-align: center; font-size: 13px; color: var(--faint); }
+.mem-doc-empty-ic { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--muted); }
+.mem-doc-empty-ic .ic { width: 18px; height: 18px; }
+.mem-doc:hover .mem-doc-empty-ic { border-color: var(--acc); color: var(--acc); }
 
 .mem-editor { flex: 1; width: 100%; margin-top: 14px; min-height: 240px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-soft); font-family: var(--mono); font-size: 12.5px; line-height: 1.7; color: var(--body); resize: none; }
 .mem-editor:hover { border-color: var(--line); background: var(--panel); }
@@ -6396,6 +6399,10 @@ html[data-theme="dark"] .sh-popover {
 .pgroup-head:hover { background: var(--panel-soft); color: var(--ink); }
 .pgroup-caret { width: 14px; height: 14px; flex: none; color: var(--faint); }
 .pgroup-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pgroup-count { flex: none; color: var(--faint); font-size: 12px; }
+.pgroup-count { flex: none; margin-right: auto; color: var(--faint); font-size: 12px; }
+.pgroup-act { width: 22px; height: 22px; display: grid; place-items: center; flex: none; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; opacity: 0; transition: opacity .12s, background .12s, color .12s; }
+.pgroup-act .ic { width: 15px; height: 15px; }
+.pgroup-act:hover { background: var(--tray); color: var(--ink); }
+.pgroup-head:hover .pgroup-act, .pgroup-head:focus-within .pgroup-act { opacity: 1; }
 .pgroup .frow-row { padding-left: 26px; }
 .pgroup .frow-empty { padding-left: 30px; }

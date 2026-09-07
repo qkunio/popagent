@@ -84,6 +84,9 @@ function Shell() {
   const [taskProject, setTaskProject] = useState<Record<string, string>>(loadTaskProject)
   const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>({})
   const [moveMenu, setMoveMenu] = useState<{ task: SidebarTask; top: number; left: number } | null>(null)
+  const [projectMenu, setProjectMenu] = useState<{ project: Project; top: number; left: number } | null>(null)
+  const [projectMemory, setProjectMemory] = useState<Project | null>(null)
+  const [pendingProject, setPendingProject] = useState<{ id: string; knownIds: string[] } | null>(null)
   const [me, setMe] = useState<{ name: string; role: string; avatar?: string; authenticated?: boolean } | null>(null)
   const [prefs, setPrefs] = useState<Prefs | null>(null)
   const toast = useToast()
@@ -157,6 +160,40 @@ function Shell() {
   useEffect(() => { localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects)) }, [projects])
   useEffect(() => { localStorage.setItem(TASK_PROJECT_KEY, JSON.stringify(taskProject)) }, [taskProject])
 
+  useEffect(() => {
+    if (!pendingProject) return
+    const fresh = sidebar.find(t => !pendingProject.knownIds.includes(t.id))
+    if (!fresh) return
+    setTaskProject(map => ({ ...map, [fresh.id]: pendingProject.id }))
+    setPendingProject(null)
+  }, [sidebar, pendingProject])
+
+  const newTaskInProject = (project: Project) => {
+    setPendingProject({ id: project.id, knownIds: sidebar.map(t => t.id) })
+    setActiveTaskId(null)
+    go('home')
+    toast(`新任务将放进「${project.name}」`)
+  }
+
+  const renameProject = async (project: Project) => {
+    setProjectMenu(null)
+    if (project.id === DEFAULT_PROJECT.id) { toast('默认项目不可重命名'); return }
+    const name = await dialog.prompt({ title: '重命名项目', defaultValue: project.name, placeholder: '项目名称', okText: '保存' })
+    if (!name || name === project.name) return
+    setProjects(list => list.map(p => (p.id === project.id ? { ...p, name } : p)))
+    toast('项目名称已更新')
+  }
+
+  const deleteProject = async (project: Project) => {
+    setProjectMenu(null)
+    if (project.id === DEFAULT_PROJECT.id) { toast('默认项目不可删除'); return }
+    const ok = await dialog.confirm({ title: '删除项目', message: `确定删除项目「${project.name}」吗？项目下的会话会回到默认项目。`, okText: '删除', danger: true })
+    if (!ok) return
+    setProjects(list => list.filter(p => p.id !== project.id))
+    setTaskProject(map => Object.fromEntries(Object.entries(map).filter(([, pid]) => pid !== project.id)))
+    toast('项目已删除')
+  }
+
   const createProject = async () => {
     const name = await dialog.prompt({ title: '新建项目', placeholder: '项目名称', okText: '创建' })
     if (!name) return
@@ -229,16 +266,43 @@ function Shell() {
             const collapsed = Boolean(collapsedProjects[project.id])
             return (
               <div className="pgroup" key={project.id}>
-                <button
-                  type="button"
+                <div
                   className="pgroup-head"
+                  role="button"
+                  tabIndex={0}
                   aria-expanded={!collapsed}
                   onClick={() => setCollapsedProjects(map => ({ ...map, [project.id]: !collapsed }))}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsedProjects(map => ({ ...map, [project.id]: !collapsed })) } }}
                 >
                   <Icon name={collapsed ? 'caret-right' : 'caret-down'} cls="ic-s ic pgroup-caret" />
                   <span className="pgroup-name">{project.name}</span>
                   <span className="pgroup-count">({items.length})</span>
-                </button>
+                  <button
+                    type="button"
+                    className="pgroup-act"
+                    aria-label={`项目操作：${project.name}`}
+                    title="更多"
+                    aria-haspopup="menu"
+                    onClick={e => {
+                      e.stopPropagation()
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      setProjectMenu(current => current?.project.id === project.id
+                        ? null
+                        : { project, top: rect.bottom + 5, left: Math.min(rect.left, window.innerWidth - 184) })
+                    }}
+                  >
+                    <Icon name="dots-three" cls="ic-s ic" />
+                  </button>
+                  <button
+                    type="button"
+                    className="pgroup-act"
+                    aria-label={`在${project.name}中新建任务`}
+                    title="新建任务"
+                    onClick={e => { e.stopPropagation(); newTaskInProject(project) }}
+                  >
+                    <Icon name="plus" cls="ic-s ic" />
+                  </button>
+                </div>
                 {!collapsed && items.map(t => (
             <div key={t.id} className={'frow frow-row' + (activeTaskId === t.id && view === 'task' ? ' on' : '')} onClick={() => openTask(t.id)}>
               <span className={'fdot' + (t.dot ? ' ' + t.dot : '')} /><span className="ftx">{t.title}</span>
@@ -369,6 +433,37 @@ function Shell() {
             </div>
           </>
         ), document.body)}
+
+        {projectMenu && createPortal((
+          <>
+            <button type="button" className="chat-more-dismiss" aria-label="关闭菜单" onClick={() => setProjectMenu(null)} />
+            <div className="chat-more-menu sidebar-chat-more-menu" role="menu" style={{ top: projectMenu.top, left: projectMenu.left }}>
+              <button type="button" role="menuitem" onClick={() => { setProjectMemory(projectMenu.project); setProjectMenu(null) }}>
+                <Icon name="brain" cls="ic" /><span>项目记忆</span>
+              </button>
+              <button type="button" role="menuitem" onClick={() => { const project = projectMenu.project; setProjectMenu(null); newTaskInProject(project) }}>
+                <Icon name="plus" cls="ic" /><span>新建任务</span>
+              </button>
+              {projectMenu.project.id !== DEFAULT_PROJECT.id && (
+                <>
+                  <button type="button" role="menuitem" onClick={() => renameProject(projectMenu.project)}>
+                    <Icon name="pencil-simple" cls="ic" /><span>重命名</span>
+                  </button>
+                  <button type="button" role="menuitem" className="danger" onClick={() => deleteProject(projectMenu.project)}>
+                    <Icon name="trash" cls="ic" /><span>删除项目</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </>
+        ), document.body)}
+
+        <MemoryDialog
+          open={Boolean(projectMemory)}
+          onClose={() => setProjectMemory(null)}
+          toast={toast}
+          scope={projectMemory ? { id: projectMemory.id, name: projectMemory.name } : undefined}
+        />
 
         <MemoryDialog open={memoryOpen} onClose={() => setMemoryOpen(false)} toast={toast} />
         <div className="vresize rail-rs" data-rs="rail" aria-label="拖拽调整侧栏宽度" />
